@@ -8,7 +8,11 @@ load_dotenv()
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # Default model instances
-llm_2_0 = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=1)
+llm_2_0 = ChatGoogleGenerativeAI(
+    model="gemini-2.0-flash",
+    temperature=1,
+    google_api_key=GOOGLE_API_KEY
+)
 
 
 # Default embeddings model
