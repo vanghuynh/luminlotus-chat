@@ -13,48 +13,39 @@ import os
 
 duckduckgo_search = DuckDuckGoSearchRun()
 python_exec = PythonREPL()
-load_dotenv() 
+load_dotenv()
 conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
-# Hàm dự đoán size quần áo
-def predict_size_model(message: str) -> str:
-    """
-    Gợi ý size dựa trên các yếu tố như chiều cao, cân nặng, giới tính, tuổi, chiều dài lưng, vòng ngực.
-    """
-    try:
-        height_match = re.search(r"cao\s*(\d+)", message)
-        weight_match = re.search(r"nặng\s*(\d+)", message)
-        gender_match = re.search(r"(nam|nữ|male|female)", message.lower())
-        if not (height_match and weight_match and gender_match):
-            return "Vui lòng cung cấp đầy đủ chiều cao, cân nặng và giới tính để tôi gợi ý size nhé, nếu có thêm chiều dài lưng và vòng ngực sẽ tốt hơn."
-        height = float(height_match.group(1))
-        weight = float(weight_match.group(1))
-        gender = gender_match.group(1)
-        # Thông tin tùy chọn
-        length_back_match = re.search(r"(lưng|chiều dài lưng)\s*(\d+)", message)
-        chest_match = re.search(r"(ngực|vòng ngực|ngang ngực)\s*(\d+)", message)
-        length_back = float(length_back_match.group(2)) if length_back_match else None
-        chest = float(chest_match.group(2)) if chest_match else None
-        # Gọi model dự đoán
-        result = predict_size(height, weight, gender, length_back, chest)
-        response = (
-                    f"📏 **Kết quả gợi ý size:**\n"
-                    f"- Chiều cao: **{height}cm**\n"
-                    f"- Cân nặng: **{weight}kg**\n"
-                    f"- Giới tính: **{gender.capitalize()}**\n"
-        )
-        if length_back:
-            response += f"- Chiều dài lưng: **{length_back}cm**\n"
-        if chest:
-            response += f"- Độ rộng ngực: **{chest}cm**\n"
 
-        response += f"🎯 **Size phù hợp:** {result['recommended_size']}"
-        return response
+# Hàm gợi ý size
+def predict_size_model(
+    height: float,
+    weight: float,
+    gender: str,
+    age: int,
+    length_back: float = None,
+    chest: float = None,
+) -> str:
+    """Gợi ý size dựa trên thông tin cơ thể của người dùng. Nếu người dùng sử dụng tiếng anh thì đơn vị chiều cao là inch, cân nặng là pound, còn nếu người dùng sử dụng tiếng việt thì đơn vị chiều cao là cm, cân nặng là kg.
+    Hướng dẫn quy đổi để người dùng tính ròi nhập: 1 inch = 2.54 cm, 1 pound = 0.453592 kg.
+    Args:
+        height (float): Chiều cao của người dùng. Nếu là tiếng việt thì đơn vị là cm, còn tiếng anh thì đơn vị là inch. Hướng dẫn quy đổi: 1 inch = 2.54 cm.
+        weight (float): Cân nặng của người dùng. Nếu là tiếng việt thì đơn vị là kg, còn tiếng anh thì đơn vị là pound. Hướng dẫn quy đổi: 1 pound = 0.453592 kg.
+        gender (str): Giới tính của người dùng.
+        age (Optional[int]): Tuổi của người dùng.
+        length_back (float, optional): Chiều dài lưng của người dùng.
+        chest (float, optional): Vòng ngực của người dùng.
+    Returns:
+        str: Kết quả gợi ý size.
+    """
+    # Dự đoán size
+    result = predict_size(
+        height, weight, gender, age=age, length_back=length_back, chest=chest
+    )
+    return result["recommended_size"]
 
-    except Exception as e:
-        return f"Đã xảy ra lỗi khi xử lý: {e}"
 
 # Tìm kiếm sản phẩm
 def extract_query_product(
@@ -63,11 +54,25 @@ def extract_query_product(
     price_range: str = "",
     in_stock: bool = True,
     limit: int = 5,
-    country_code: str = "VN" 
+    country_code: str = "",
+    lang: str = "",
 ) -> list:
     """
     Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia.
+    Args:
+        size (str): Kích cỡ sản phẩm.
+        color (str): Màu sắc sản phẩm.
+        price_range (str): Khoảng giá sản phẩm. Nếu là tiếng việt (Việt Nam) thì truy vấn giá theo quốc gia Việt Nam, còn tiếng anh (Mỹ) thì truy vấn giá theo quốc gia Mỹ. Ví dụ nếu là tiếng việt thì có thể là " dưới 500k", "trên 500K", "khoảng 200k", "từ 200-500k", còn nếu tiếng anh thì có thể là "under 50$", "over 500$", "about 200$", "from 200-500$".
+        in_stock (bool): Chỉ lấy sản phẩm còn hàng.
+        limit (int): Số lượng sản phẩm trả về.
+        country_code (str): Mã quốc gia để lấy giá theo quốc gia.
+        lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
+    Returns:
+        list: Danh sách sản phẩm phù hợp dưới dạng markdown.
     """
+    price_unit = "$" if country_code == "US" else "VND"
+    if not country_code:
+        country_code = "US" if lang == "en" else "VN"
     sql = """
     SELECT 
         p.id,
@@ -84,7 +89,7 @@ def extract_query_product(
     WHERE 1=1
     """
     params = []
-    # ✅ Lọc quốc gia 
+    # ✅ Lọc quốc gia
     sql += " AND c.code = %s"
     params.append(country_code)
     # Lọc theo size
@@ -98,11 +103,13 @@ def extract_query_product(
     # Lọc theo còn hàng
     if in_stock:
         sql += " AND v.stock > 0"
-    # Lọc theo khoảng giá
+    # Lọc theo khoảng giá theo quốc gia
     price_min = 0
     price_max = 1e9
     if price_range:
         t = price_range.lower().replace(".", "").replace(",", "")
+        t = t.replace("tr", "000000").replace("k", "000")  
+        t = re.sub(r"[^\d\-]", " ", t)  
         digits = [int(s) for s in t.split() if s.isdigit()]
         if "dưới" in t and digits:
             price_max = digits[0]
@@ -128,20 +135,32 @@ def extract_query_product(
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock = p
+        price_fmt = f"{price:,.0f} {price_unit}"
         response += (
             f"\n🧥 **{name}**\n"
-            f"- 💰 Giá: {price:,.0f} VND\n"
+            f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
-            f"- 🔢 SKU: {sku} | 📦 Tồn kho: {stock}\n"
+            f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
         )
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
     return response
 
+
 # Trích xuất kiểm tra đơn hàng
-def check_order_status(order_id: str = "", phone: str = "") -> str:
+def check_order_status(
+    order_id: str = "", phone: str = "", country_code: str = "", lang: str = ""
+) -> str:
     """
     Kiểm tra tình trạng đơn hàng và hiển thị chi tiết từng đơn hàng kèm thông tin khách hàng và sản phẩm.
+    Args:
+        order_id (str): Mã đơn hàng của đơn hàng.
+        phone (str): Số điện thoại của khách hàng.
+    Returns:
+        str: Kết quả kiểm tra đơn hàng dưới dạng markdown.
     """
+    price_unit = "$" if lang == "en" else "VND"
+    if not country_code:
+        country_code = "US" if lang == "en" else "VN"
     sql = """
         SELECT 
             o.id,
@@ -159,19 +178,20 @@ def check_order_status(order_id: str = "", phone: str = "") -> str:
             a.ward,
             a.district,
             a.province,
-            a."countryId"
+            a."countryId",
+            o."uniqueCode"
         FROM "Order" o
         LEFT JOIN "Address" a ON a.id = o."addressId"
         WHERE 1=1
     """
     params = []
     if order_id:
-        sql += " AND o.\"orderCode\" ILIKE %s"
+        sql += ' AND o."uniqueCode" ILIKE %s'
         params.append(f"%{order_id}%")
     if phone:
         sql += " AND a.phone ILIKE %s"
         params.append(f"%{phone}%")
-    sql += " ORDER BY o.\"createdAt\" DESC LIMIT 3"
+    sql += ' ORDER BY o."createdAt" DESC LIMIT 3'
     try:
         logger.info(f"Checking order status with params: {params}")
         cursor.execute(sql, params)
@@ -179,7 +199,7 @@ def check_order_status(order_id: str = "", phone: str = "") -> str:
         if not orders:
             return "Không tìm thấy đơn hàng nào khớp với thông tin bạn cung cấp."
         response = "Tôi đã tìm thấy các đơn hàng của bạn với thông tin đã cung cấp:\n"
-        
+
         for order in orders:
             (
                 order_id,
@@ -197,7 +217,8 @@ def check_order_status(order_id: str = "", phone: str = "") -> str:
                 ward,
                 district,
                 province,
-                country_id
+                country_id,
+                unique_code,
             ) = order
             # Xử lý tên người nhận
             if shipping_full_name:
@@ -205,21 +226,21 @@ def check_order_status(order_id: str = "", phone: str = "") -> str:
             else:
                 full_name = f"{first_name or ''} {last_name or ''}".strip()
             created_at_fmt = created_at.strftime("%d/%m/%Y %H:%M")
-            total_fmt = f"{total:,.0f} VND"
+            total_fmt = f"{total:,.0f} {price_unit}"
             note = note if note else "(không có ghi chú)"
             address_parts = [street, ward, district, province]
-            shipping_address = ', '.join([p for p in address_parts if p])
+            shipping_address = ", ".join([p for p in address_parts if p])
             response += (
-                f"\n**Đơn hàng {order_code}:**\n"
-                f"* **Trạng thái:** {status}\n"
-                f"* **Ngày đặt:** {created_at_fmt}\n"
-                f"* **Tổng tiền:** {total_fmt}\n"
-                f"* **Tên người đặt:** {full_name}\n"
-                f"* **Số điện thoại:** {phone}\n"
-                f"* **Email:** {email or '(không có email)'}\n"
-                f"* **Địa chỉ:** {shipping_address}\n"
-                f"* **Ghi chú:** {note}\n"
-                f"* **Sản phẩm:**\n"
+                f"\n**Đơn hàng #{unique_code}**\n"
+                f"- Trạng thái: {status}\n"
+                f"- Ngày đặt: {created_at_fmt}\n"
+                f"- Tổng tiền: {total_fmt}\n"
+                f"- Người nhận: {full_name}\n"
+                f"- Email: {email}\n"
+                f"- Số điện thoại: {phone}\n"
+                f"- Địa chỉ giao hàng: {shipping_address}\n"
+                f"- Ghi chú: {note}\n"
+                f"- Mã đơn hàng duy nhất: {unique_code}\n"
             )
             # Truy vấn sản phẩm của đơn hàng
             item_sql = """
@@ -236,91 +257,109 @@ def check_order_status(order_id: str = "", phone: str = "") -> str:
             """
             cursor.execute(item_sql, (order_id,))
             items = cursor.fetchall()
+
             for item in items:
                 name, size, color, quantity, price = item
+                price_fmt = f"{price:,.0f} {price_unit}"
                 response += (
-                    f"*   {name} (Size {size}, Màu {color}) – "
-                    f"Số lượng: {quantity} – Giá: {price:,.0f} VND\n"
+                    f"*   {name} \n"
+                    f"  Size: {size}, \n"
+                    f"  Màu: {color}) – "
+                    f"Số lượng: {quantity} \n"
+                    f"  Giá: {price_fmt}\n"
                 )
         return response
     except Exception as e:
         logger.error(f"Error checking order: {e}")
         return "Đã xảy ra lỗi khi kiểm tra đơn hàng. Vui lòng thử lại sau."
 
-# Lấy thông tin chi tiết về sản phẩm
-def extract_information_product(product_keyword: str) -> str:
+
+# Truy vấn thông tin chi tiết sản phẩm
+def extract_information_product(
+    product_keyword: str, lang: str = "vi", country_code: str = ""
+) -> str:
     """
-    Trả về thông tin chi tiết sản phẩm bao gồm các biến thể: size, màu, SKU, tồn kho, giá, khối lượng.
+    Truy vấn thông tin chi tiết sản phẩm theo từ khóa hoặc tên sản phẩm.
+    Args:
+        product_keyword (str): Từ khóa hoặc tên sản phẩm cần tìm.
+        lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
+        country_code (str): Mã quốc gia để lấy giá theo quốc gia.
+    Returns:
+        str: Kết quả thông tin chi tiết sản phẩm dưới dạng markdown.
     """
+    price_unit = "$" if lang == "en" else "VND"
+    if not country_code:
+        country_code = "US" if lang == "en" else "VN"
     sql = """
         SELECT 
-        p.id,
-        p.name,
-        p.description,
-        p.price AS default_price,
-        p.stock,
-        p.images,
-        c.name AS category_name,
-        v.id AS variant_id,
-        v.color,
-        v.size,
-        v.stock AS variant_stock,
-        v.sku,
-        v.weight
-    FROM "Product" p
-    LEFT JOIN "Category" c ON c.id = p."categoryId"
-    LEFT JOIN "ProductVariant" v ON v."productId" = p.id 
-    WHERE LOWER(p.name) ILIKE %s
-    ORDER BY v.size, v.color
+            p.id,
+            p.name,
+            p.description,
+            pp.price AS country_price,
+            p.stock,
+            p.images,
+            c.name AS category_name,
+            v.id AS variant_id,
+            v.color,
+            v.size,
+            v.stock AS variant_stock,
+            v.sku,
+            v.weight
+        FROM "Product" p
+        LEFT JOIN "ProductVariant" v ON v."productId" = p.id 
+        LEFT JOIN "Category" c ON c.id = p."categoryId"
+        LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
+        LEFT JOIN "Country" co ON co.id = pp."countryId"
+        WHERE LOWER(p.name) ILIKE %s AND co.code = %s
+        ORDER BY v.size, v.color
     """
-    try:
-        cursor.execute(sql, (f"%{product_keyword.lower()}%",))
-        rows = cursor.fetchall()
+    cursor.execute(sql, (f"%{product_keyword.lower()}%", country_code))
+    rows = cursor.fetchall()
+    if not rows:
+        return f"Không tìm thấy sản phẩm nào khớp với từ khóa: {product_keyword}"
 
-        if not rows:
-            return f"Không tìm thấy sản phẩm nào khớp với từ khóa: {product_keyword}"
-
-        first_row = rows[0]
-        product_name = first_row[1]
-        description = first_row[2]
-        default_price = first_row[3]
-        total_stock = first_row[4]
-        images = first_row[5]
-        category_name = first_row[6]
-
-        response = f"🛍 **{product_name}**\n"
-        response += f"- Danh mục: {category_name}\n"
-        response += f"- Giá mặc định: {default_price:,.0f} VND\n"
-        response += f"- Tổng tồn kho: {total_stock} sản phẩm\n"
-        response += f"- Mô tả: {description}\n"
-        if images:
-            response += f"- Hình ảnh: {images[0]}\n"
-
-        response += "\n**🔄 Biến thể sản phẩm:**\n"
-        for row in rows:
-            color = row[8]
-            size = row[9]
-            variant_stock = row[10]
-            sku = row[11]
-            weight = row[12]
-
-            response += (
-                f"* Màu: {color} – Size: {size} – SKU: {sku} – "
-                f"Tồn kho: {variant_stock} – Nặng: {weight}kg\n"
-            )
-
-        return response
-
-    except Exception as e:
-        logger.error(f"Lỗi khi truy vấn chi tiết sản phẩm: {e}")
-        return "Đã xảy ra lỗi khi lấy chi tiết sản phẩm. Vui lòng thử lại."
+    first = rows[0]
+    name, desc, price, stock, images, category = (
+        first[1],
+        first[2],
+        first[3],
+        first[4],
+        first[5],
+        first[6],
+    )
+    response = f"🛍 **{name}**\n"
+    response += (
+        f"- Danh mục: {category}\n"
+        f"- Giá: {price:,.0f} {price_unit}\n"
+        f"- Tồn kho: {stock}\n"
+        f"- Mô tả: {desc}\n"
+    )
+    if images:
+        response += f'![{name}]({images[0]})\n'
+        #kích thước ảnh
+        response += f"![{name} thumbnail]({images[0]}?width=50)\n"
+    else:
+        response += "Không có hình ảnh cho sản phẩm này.\n"
+    response += "\n🔄 **Các biến thể:**\n"
+    for row in rows:
+        response += (
+            f"* Màu: {row[8]} \n"
+            f"  Size: {row[9]} – \n"
+            f"  SKU: {row[11]} – \n"
+            f"  Sẵn có: {row[10]} – \n"
+            f"  Nặng: {row[12]}kg\n"
+        )
+    return response
 
 
 # Lấy thông tin về các chương trình khuyến mãi hiện có
-def check_active_coupons() -> str:
+def check_active_coupons(lang: str = "", country_code: str = "") -> str:
     """
-    Trả về danh sách các mã giảm giá còn hiệu lực.
+    Trả về danh sách các mã giảm giá còn hiệu lực dưới dạng markdown.
     """
+    price_unit = "$" if lang == "en" else "VND"
+    if not country_code:
+        country_code = "US" if lang == "en" else "VN"
     sql = """
         SELECT 
             code,
@@ -359,17 +398,21 @@ def check_active_coupons() -> str:
 
             # Hiển thị mức giảm
             if discount_type == "AMOUNT":
-                discount_info = f"{discount_value:,.0f} VND"
+                discount_info = f"{discount_value:,.0f} {price_unit}"
             elif discount_type == "PERCENT":
                 discount_info = f"{discount_value:.0f}%"
             else:
                 discount_info = f"{discount_value}"
 
             max_discount_str = (
-                f" – Giảm tối đa {max_discount:,.0f} VND" if max_discount else ""
+                f" – Giảm tối đa {max_discount:,.0f} {price_unit}"
+                if max_discount
+                else ""
             )
             min_order_str = (
-                f" – Đơn tối thiểu {min_order_value:,.0f} VND" if min_order_value else ""
+                f" – Đơn tối thiểu {min_order_value:,.0f} {price_unit}"
+                if min_order_value
+                else ""
             )
 
             response += (

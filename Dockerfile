@@ -1,5 +1,5 @@
 # Sử dụng Python image nhẹ
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 # Cài đặt biến môi trường để tránh gợi ý input
 ENV PYTHONDONTWRITEBYTECODE=1
