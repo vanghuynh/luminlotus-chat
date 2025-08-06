@@ -70,7 +70,7 @@ def extract_query_product(
     Returns:
         list: Danh sách sản phẩm phù hợp dưới dạng markdown.
     """
-    price_unit = "$" if country_code == "US" else "VND"
+    price_unit = "VND" if country_code == "VN" else "$"
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     sql = """

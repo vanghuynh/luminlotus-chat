@@ -1,5 +1,5 @@
 from langgraph.graph import StateGraph, START, END
-from src.config.llm import llm_2_0
+from src.config.llm import get_llm
 from .func import State
 from langgraph.graph.state import CompiledStateGraph
 
