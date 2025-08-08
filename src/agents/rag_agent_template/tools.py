@@ -56,9 +56,10 @@ def extract_query_product(
     limit: int = 5,
     country_code: str = "",
     lang: str = "",
+    category_name: str = "",
 ) -> list:
     """
-    Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia.
+    Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia, danh mục sản phẩm.
     Args:
         size (str): Kích cỡ sản phẩm.
         color (str): Màu sắc sản phẩm.
@@ -67,12 +68,15 @@ def extract_query_product(
         limit (int): Số lượng sản phẩm trả về.
         country_code (str): Mã quốc gia để lấy giá theo quốc gia.
         lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
+        category_name (str): Tên danh mục sản phẩm để lọc kết quả. Ví dụ: thời trang nam, thời trang nữ.
     Returns:
         list: Danh sách sản phẩm phù hợp dưới dạng markdown.
     """
-    price_unit = "VND" if country_code == "VN" else "$"
+
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
+    price_unit = "$" if lang == "en" else "VND"
+
     sql = """
     SELECT 
         p.id,
@@ -86,12 +90,17 @@ def extract_query_product(
     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
     LEFT JOIN "Country" c ON c.id = pp."countryId"
+    LEFT JOIN "Category" cat ON cat.id = p."categoryId"
     WHERE 1=1
     """
     params = []
     # ✅ Lọc quốc gia
     sql += " AND c.code = %s"
     params.append(country_code)
+    # ✅ Lọc theo category name
+    if category_name:
+        sql += " AND cat.name ILIKE %s"
+        params.append(f"%{category_name.strip()}%")
     # Lọc theo size
     if size:
         sql += " AND v.size ILIKE %s"
@@ -114,7 +123,30 @@ def extract_query_product(
         if "dưới" in t and digits:
             price_max = digits[0]
         elif "trên" in t and digits:
-            price_min = digits[0]
+            price_min = digits[0] * 4
+        elif "khoảng" in t and len(digits) == 1:
+            price_min = price_max = digits[0]
+        elif "từ" in t and "-" in t:
+            try:
+                parts = t.split("-")
+                price_min = int("".join(filter(str.isdigit, parts[0])))
+                price_max = int("".join(filter(str.isdigit, parts[1])))
+            except:
+                pass
+        elif "under" in t and digits:
+            price_max = digits[0]
+        elif "over" in t and digits:
+            price_min = digits[0] * 4
+        elif "about" in t and digits:
+            price_min = price_max = digits[0]
+            price_min *= 4
+        elif "from" in t and "-" in t:
+            try:
+                parts = t.split("-")
+                price_min = int("".join(filter(str.isdigit, parts[0])))
+                price_max = int("".join(filter(str.isdigit, parts[1])))
+            except:
+                pass
         elif "-" in t:
             try:
                 parts = t.split("-")
@@ -138,6 +170,7 @@ def extract_query_product(
         price_fmt = f"{price:,.0f} {price_unit}"
         response += (
             f"\n🧥 **{name}**\n"
+            f"- Danh mục: {category_name}\n"
             f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
@@ -151,16 +184,18 @@ def check_order_status(
     order_id: str = "", phone: str = "", country_code: str = "", lang: str = ""
 ) -> str:
     """
-    Kiểm tra tình trạng đơn hàng và hiển thị chi tiết từng đơn hàng kèm thông tin khách hàng và sản phẩm.
+    Kiểm tra tình trạng đơn hàng và hiển thị chi tiết từng đơn hàng kèm thông tin khách hàng và sản phẩm theo số điện thoại hoặc mã đơn hàng.
     Args:
         order_id (str): Mã đơn hàng của đơn hàng.
         phone (str): Số điện thoại của khách hàng.
     Returns:
         str: Kết quả kiểm tra đơn hàng dưới dạng markdown.
     """
-    price_unit = "$" if lang == "en" else "VND"
+
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
+    price_unit = "$" if lang == "en" else "VND"
+    
     sql = """
         SELECT 
             o.id,
@@ -287,9 +322,11 @@ def extract_information_product(
     Returns:
         str: Kết quả thông tin chi tiết sản phẩm dưới dạng markdown.
     """
-    price_unit = "$" if lang == "en" else "VND"
+
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
+    price_unit = "$" if lang == "en" else "VND"
+
     sql = """
         SELECT 
             p.id,
@@ -331,7 +368,7 @@ def extract_information_product(
     response += (
         f"- Danh mục: {category}\n"
         f"- Giá: {price:,.0f} {price_unit}\n"
-        f"- Tồn kho: {stock}\n"
+        f"- Có sẵn: {stock}\n"
         f"- Mô tả: {desc}\n"
     )
     if images:
@@ -346,7 +383,7 @@ def extract_information_product(
             f"* Màu: {row[8]} \n"
             f"  Size: {row[9]} – \n"
             f"  SKU: {row[11]} – \n"
-            f"  Sẵn có: {row[10]} – \n"
+            f"  Có sẵn: {row[10]} – \n"
             f"  Nặng: {row[12]}kg\n"
         )
     return response
@@ -357,9 +394,10 @@ def check_active_coupons(lang: str = "", country_code: str = "") -> str:
     """
     Trả về danh sách các mã giảm giá còn hiệu lực dưới dạng markdown.
     """
-    price_unit = "$" if lang == "en" else "VND"
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
+    price_unit = "$" if lang == "en" else "VND"
+   
     sql = """
         SELECT 
             code,
