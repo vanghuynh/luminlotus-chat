@@ -1,3 +1,4 @@
+from pprint import pp
 from unittest import result
 from langchain_core.tools import tool
 from src.utils.helper import convert_list_context_source_to_str
@@ -10,7 +11,9 @@ import psycopg2
 import re
 from dotenv import load_dotenv
 import os
-
+import json
+from flask import request
+from urllib.parse import quote
 duckduckgo_search = DuckDuckGoSearchRun()
 python_exec = PythonREPL()
 load_dotenv()
@@ -47,6 +50,144 @@ def predict_size_model(
     return result["recommended_size"]
 
 
+# # Tìm kiếm sản phẩm
+# def extract_query_product(
+#     size: str = "",
+#     color: str = "",
+#     price_range: str = "",
+#     in_stock: bool = True,
+#     limit: int = 5,
+#     country_code: str = "",
+#     lang: str = "",
+#     category_name: str = "",
+# ) -> list:
+#     """
+#     Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia, danh mục sản phẩm.
+#     Args:
+#         size (str): Kích cỡ sản phẩm.
+#         color (str): Màu sắc sản phẩm.
+#         price_range (str): Khoảng giá sản phẩm. Nếu là tiếng việt (Việt Nam) thì truy vấn giá theo quốc gia Việt Nam, còn tiếng anh (Mỹ) thì truy vấn giá theo quốc gia Mỹ. Ví dụ nếu là tiếng việt thì có thể là " dưới 500k", "trên 500K", "khoảng 200k", "từ 200-500k", còn nếu tiếng anh thì có thể là "under 50$", "over 500$", "about 200$", "from 200-500$".
+#         in_stock (bool): Chỉ lấy sản phẩm còn hàng.
+#         limit (int): Số lượng sản phẩm trả về.
+#         country_code (str): Mã quốc gia để lấy giá theo quốc gia.
+#         lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
+#         category_name (str): Tên danh mục sản phẩm để lọc kết quả. Ví dụ: thời trang nam, thời trang nữ.
+#     Returns:
+#         list: Danh sách sản phẩm phù hợp dưới dạng markdown.
+#         Có kèm hình ảnh sản phẩm và link đến trang chi tiết sản phẩm.
+#     """
+
+#     if not country_code:
+#         country_code = "US" if lang == "en" else "VN"
+#     price_unit = "$" if lang == "en" else "VND"
+
+#     sql = """
+#     SELECT 
+#         p.id,
+#         p.name AS product_name,
+#         pp.price,
+#         v.size,
+#         v.color,
+#         v.sku,
+#         v.stock,
+#         pp.image_url
+#     FROM "Product" p
+#     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+#     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
+#     LEFT JOIN "Country" c ON c.id = pp."countryId"
+#     LEFT JOIN "Category" cat ON cat.id = p."categoryId"
+#     WHERE 1=1
+#     """
+#     params = []
+#     # ✅ Lọc quốc gia
+#     sql += " AND c.code = %s"
+#     params.append(country_code)
+#     # ✅ Lọc theo category name
+#     if category_name:
+#         sql += " AND cat.name ILIKE %s"
+#         params.append(f"%{category_name.strip()}%")
+#     # Lọc theo size
+#     if size:
+#         sql += " AND v.size ILIKE %s"
+#         params.append(f"%{size.strip()}%")
+#     # Lọc theo màu sắc
+#     if color:
+#         sql += " AND v.color ILIKE %s"
+#         params.append(f"%{color.strip()}%")
+#     # Lọc theo còn hàng
+#     if in_stock:
+#         sql += " AND v.stock > 0"
+#     # Lọc theo khoảng giá theo quốc gia
+#     price_min = 0
+#     price_max = 1e9
+#     if price_range:
+#         t = price_range.lower().replace(".", "").replace(",", "")
+#         t = t.replace("tr", "000000").replace("k", "000")  
+#         t = re.sub(r"[^\d\-]", " ", t)  
+#         digits = [int(s) for s in t.split() if s.isdigit()]
+#         if "dưới" in t and digits:
+#             price_max = digits[0]
+#         elif "trên" in t and digits:
+#             price_min = digits[0] * 4
+#         elif "khoảng" in t and len(digits) == 1:
+#             price_min = price_max = digits[0]
+#         elif "từ" in t and "-" in t:
+#             try:
+#                 parts = t.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+#         elif "under" in t and digits:
+#             price_max = digits[0]
+#         elif "over" in t and digits:
+#             price_min = digits[0] * 4
+#         elif "about" in t and digits:
+#             price_min = price_max = digits[0]
+#             price_min *= 4
+#         elif "from" in t and "-" in t:
+#             try:
+#                 parts = t.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+#         elif "-" in t:
+#             try:
+#                 parts = t.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+
+#     sql += " AND pp.price BETWEEN %s AND %s"
+#     params.extend([price_min, price_max])
+#     sql += " ORDER BY pp.price ASC LIMIT %s"
+#     params.append(limit)
+#     cursor.execute(sql, params)
+#     products = cursor.fetchall()
+#     pp(products)
+
+#     if not products:
+#         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
+
+#     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
+#     for p in products:
+#         pid, name, price, size, color, sku, stock = p
+#         price_fmt = f"{price:,.0f} {price_unit}"
+#         response += (
+#             f"\n🧥 **{name}**\n"
+#             f"- Danh mục: {category_name}\n"
+#             f"- 💰 Giá: {price_fmt}\n"
+#             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
+#             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
+#             f"- [Xem chi tiết](https://example.com/product/{pid})\n"
+#             f"- 🖼️ Hình ảnh: ![Image](https://example.com/image/{pid})\n"
+#         )
+
+#     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
+#     return response
+
 # Tìm kiếm sản phẩm
 def extract_query_product(
     size: str = "",
@@ -57,22 +198,21 @@ def extract_query_product(
     country_code: str = "",
     lang: str = "",
     category_name: str = "",
-) -> list:
+) -> str:
     """
-    Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia, danh mục sản phẩm.
+    Tìm kiếm sản phẩm theo các tiêu chí như giá, màu, kích thước.
     Args:
-        size (str): Kích cỡ sản phẩm.
+        size (str): Kích thước sản phẩm.
         color (str): Màu sắc sản phẩm.
-        price_range (str): Khoảng giá sản phẩm. Nếu là tiếng việt (Việt Nam) thì truy vấn giá theo quốc gia Việt Nam, còn tiếng anh (Mỹ) thì truy vấn giá theo quốc gia Mỹ. Ví dụ nếu là tiếng việt thì có thể là " dưới 500k", "trên 500K", "khoảng 200k", "từ 200-500k", còn nếu tiếng anh thì có thể là "under 50$", "over 500$", "about 200$", "from 200-500$".
-        in_stock (bool): Chỉ lấy sản phẩm còn hàng.
-        limit (int): Số lượng sản phẩm trả về.
-        country_code (str): Mã quốc gia để lấy giá theo quốc gia.
-        lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
-        category_name (str): Tên danh mục sản phẩm để lọc kết quả. Ví dụ: thời trang nam, thời trang nữ.
+        price_range (str): Khoảng giá sản phẩm.
+        in_stock (bool): Tình trạng còn hàng.
+        limit (int): Số lượng sản phẩm tối đa trả về.
+        country_code (str): Mã quốc gia.
+        lang (str): Ngôn ngữ.
+        category_name (str): Tên danh mục sản phẩm.
     Returns:
-        list: Danh sách sản phẩm phù hợp dưới dạng markdown.
+        str: Kết quả tìm kiếm sản phẩm trả về dưới dạng markdown.
     """
-
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
@@ -85,33 +225,30 @@ def extract_query_product(
         v.size,
         v.color,
         v.sku,
-        v.stock
+        v.stock,
+        p.images[1] AS image_url      -- 👈 lấy ảnh đầu tiên trong mảng
     FROM "Product" p
     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
     LEFT JOIN "Country" c ON c.id = pp."countryId"
     LEFT JOIN "Category" cat ON cat.id = p."categoryId"
     WHERE 1=1
+    AND c.code = %s
     """
-    params = []
-    # ✅ Lọc quốc gia
-    sql += " AND c.code = %s"
-    params.append(country_code)
-    # ✅ Lọc theo category name
+    params = [country_code]
+
     if category_name:
         sql += " AND cat.name ILIKE %s"
         params.append(f"%{category_name.strip()}%")
-    # Lọc theo size
     if size:
         sql += " AND v.size ILIKE %s"
         params.append(f"%{size.strip()}%")
-    # Lọc theo màu sắc
     if color:
         sql += " AND v.color ILIKE %s"
         params.append(f"%{color.strip()}%")
-    # Lọc theo còn hàng
     if in_stock:
         sql += " AND v.stock > 0"
+
     # Lọc theo khoảng giá theo quốc gia
     price_min = 0
     price_max = 1e9
@@ -154,30 +291,37 @@ def extract_query_product(
                 price_max = int("".join(filter(str.isdigit, parts[1])))
             except:
                 pass
+
     sql += " AND pp.price BETWEEN %s AND %s"
     params.extend([price_min, price_max])
     sql += " ORDER BY pp.price ASC LIMIT %s"
     params.append(limit)
+
     cursor.execute(sql, params)
     products = cursor.fetchall()
+    # pp(products)  # bật khi cần debug
 
     if not products:
         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
-
-    response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
-    for p in products:
-        pid, name, price, size, color, sku, stock = p
+    PRODUCT_BASE_URL = "https://luminlotus.onrender.com/products/"
+    resp = '<div><b>🔎 Kết quả tìm kiếm sản phẩm:</b></div>'
+    for pid, name, price, vsize, vcolor, sku, stock, image_url in products:
+        image_url = image_url or f"https://luminlotus.onrender.com/static/placeholder.png"
         price_fmt = f"{price:,.0f} {price_unit}"
-        response += (
-            f"\n🧥 **{name}**\n"
-            f"- Danh mục: {category_name}\n"
-            f"- 💰 Giá: {price_fmt}\n"
-            f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
-            f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
-        )
-    response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
-    return response
-
+        product_url = f"{PRODUCT_BASE_URL}{pid}".rstrip("/")
+        resp += f"""
+        <div style="margin:12px 0;padding:10px;border:1px solid #e9e9e9;border-radius:10px;">
+        <div style="font-weight:700;">🧥 {name}</div>
+        {f'<div>- Danh mục: {category_name}</div>' if category_name else ''}
+        <div>- 💰 Giá: {price_fmt}</div>
+        <div>- 🎨 Màu: {vcolor} &nbsp;|&nbsp; 📏 Size: {vsize}</div>
+        <div>- 🔢 SKU: {sku} &nbsp;|&nbsp; 📦 Có sẵn: {stock}</div>
+        <div>- <a href="{product_url}" target="_blank">🔗 Xem chi tiết</a></div>
+        <img src="{image_url}" alt="{name}" style="max-width:160px;border-radius:8px;margin-top:8px;display:block;">
+        </div>
+        """
+    resp += "<div>👉 Bạn muốn xem chi tiết sản phẩm nào không?</div>"
+    return resp
 
 # Trích xuất kiểm tra đơn hàng
 def check_order_status(

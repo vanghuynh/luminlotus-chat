@@ -79,6 +79,13 @@
     .chat-input button:hover {
       background-color: #45a049;
     }
+    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; margin-top:6px; }
+    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; }
+    .bot-msg div { line-height: 1.45; }
+    .bot-msg { color:#222; }
+    .bot-msg, .bot-msg * { white-space: normal; }
+    .bot-msg p { margin: 6px 0; line-height: 1.5; }
+    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; margin-top:6px; }
   </style>
 
   <!-- ✅ Markdown parser -->
@@ -128,18 +135,21 @@
     }
 
     // ✅ Hiển thị Markdown + xử lý xuống dòng đúng
-    function renderMessage(msg, from) {
-      const chatBox = document.getElementById("chat-box");
-      const div = document.createElement("div");
-      div.className = from === 'user' ? 'user-msg' : 'bot-msg';
+   function renderMessage(msg, from) {
+  const chatBox = document.getElementById("chat-box");
+  const div = document.createElement("div");
+  div.className = from === 'user' ? 'user-msg' : 'bot-msg';
 
-      const label = from === 'user' ? '<b>Bạn:</b> ' : '<b>AIFSHOP:</b> ';
-      const formatted = marked.parse(msg.replace(/\n/g, '  \n')); // hỗ trợ xuống dòng Markdown
-      div.innerHTML = label + formatted;
+  const label = from === 'user' ? '<b>Bạn:</b> ' : '<b>AIFSHOP:</b> ';
 
-      chatBox.appendChild(div);
-      chatBox.scrollTop = chatBox.scrollHeight;
-    }
+  // Có thẻ HTML ⇒ render nguyên dạng; Không có ⇒ Markdown
+  const looksLikeHTML = /<[^>]+>/.test(msg);
+  const body = looksLikeHTML ? msg : marked.parse(msg);
+
+  div.innerHTML = label + body;
+  chatBox.appendChild(div);
+  chatBox.scrollTop = chatBox.scrollHeight;
+}
 
     // 👋 Gửi lời chào khi mở chat
     document.addEventListener("DOMContentLoaded", async function () {
@@ -158,5 +168,8 @@
       }
     });
   </script>
+  <script>
+  marked.setOptions({ gfm: true, breaks: true });
+</script>
 </body>
 </html>
