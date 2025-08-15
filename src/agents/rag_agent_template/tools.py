@@ -50,7 +50,7 @@ def predict_size_model(
     return result["recommended_size"]
 
 
-# Tìm kiếm sản phẩm
+# Tìm kiếm sản phẩm dựa vào tiêu chí giá, size, màu.
 def extract_query_product(
     size: str = "",
     color: str = "",
@@ -90,7 +90,7 @@ def extract_query_product(
         v.color,
         v.sku,
         v.stock,
-    p.images[1] AS image_url
+        p.images[1] AS image_url
     FROM "Product" p
     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
@@ -200,11 +200,10 @@ def check_order_status(
     Returns:
         str: Kết quả kiểm tra đơn hàng dưới dạng markdown.
     """
-
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
-    
+
     sql = """
         SELECT 
             o.id,
@@ -236,17 +235,18 @@ def check_order_status(
         sql += " AND a.phone ILIKE %s"
         params.append(f"%{phone}%")
     sql += ' ORDER BY o."createdAt" DESC LIMIT 3'
+
     try:
-        logger.info(f"Checking order status with params: {params}")
         cursor.execute(sql, params)
         orders = cursor.fetchall()
         if not orders:
             return "Không tìm thấy đơn hàng nào khớp với thông tin bạn cung cấp."
+
         response = "Tôi đã tìm thấy các đơn hàng của bạn với thông tin đã cung cấp:\n"
 
         for order in orders:
             (
-                order_id,
+                order_db_id,
                 order_code,
                 status,
                 created_at,
@@ -255,7 +255,7 @@ def check_order_status(
                 first_name,
                 last_name,
                 email,
-                phone,
+                phone_num,
                 note,
                 street,
                 ward,
@@ -264,59 +264,63 @@ def check_order_status(
                 country_id,
                 unique_code,
             ) = order
-            # Xử lý tên người nhận
-            if shipping_full_name:
-                full_name = shipping_full_name.strip()
-            else:
-                full_name = f"{first_name or ''} {last_name or ''}".strip()
-            created_at_fmt = created_at.strftime("%d/%m/%Y %H:%M")
+
+            full_name = shipping_full_name.strip() if shipping_full_name else f"{first_name or ''} {last_name or ''}".strip()
+            created_at_fmt = created_at.strftime("%d/%m/%Y")
             total_fmt = f"{total:,.0f} {price_unit}"
             note = note if note else "(không có ghi chú)"
-            address_parts = [street, ward, district, province]
-            shipping_address = ", ".join([p for p in address_parts if p])
-            response += (
-                f"\n**Đơn hàng #{unique_code}**\n"
-                f"- Trạng thái: {status}\n"
-                f"- Ngày đặt: {created_at_fmt}\n"
-                f"- Tổng tiền: {total_fmt}\n"
-                f"- Người nhận: {full_name}\n"
-                f"- Email: {email}\n"
-                f"- Số điện thoại: {phone}\n"
-                f"- Địa chỉ giao hàng: {shipping_address}\n"
-                f"- Ghi chú: {note}\n"
-                f"- Mã đơn hàng duy nhất: {unique_code}\n"
-            )
-            # Truy vấn sản phẩm của đơn hàng
+            shipping_address = ", ".join([p for p in [street, ward, district, province] if p])
+
+            # Lấy sản phẩm (dùng cách lấy hình như extract_query_product)
             item_sql = """
                 SELECT 
                     p.name,
                     v.size,
                     v.color,
                     i.quantity,
-                    i.price
+                    i.price,
+                    COALESCE(p.images[1], '') AS image_url
                 FROM "OrderItem" i
                 JOIN "Product" p ON p.id = i."productId"
                 JOIN "ProductVariant" v ON v.id = i."productVariantId"
                 WHERE i."orderId" = %s
             """
-            cursor.execute(item_sql, (order_id,))
+            cursor.execute(item_sql, (order_db_id,))
             items = cursor.fetchall()
 
-            for item in items:
-                name, size, color, quantity, price = item
+            response += f"\n**Đơn hàng #{unique_code}**\n"
+
+            # Hiển thị sản phẩm trước, mỗi thuộc tính xuống dòng
+            for name, size, color, quantity, price, image_url in items:
                 price_fmt = f"{price:,.0f} {price_unit}"
                 response += (
-                    f"*   {name} \n"
-                    f"  Size: {size}, \n"
-                    f"  Màu: {color}) – "
-                    f"Số lượng: {quantity} \n"
-                    f"  Giá: {price_fmt}\n"
+                    f"* Sản phẩm: {name}\n"
+                    f"  - Size: {size}\n"
+                    f"  - Màu: {color}\n"
+                    f"  - Số lượng: {quantity}\n"
+                    f"  - Giá: {price_fmt}\n"
                 )
+                if image_url:
+                    response += f"  - 🖼️ Hình ảnh: ![Image]({image_url})\n"
+
+            # Sau đó mới tới thông tin đơn hàng
+            response += (
+                f"- Trạng thái: {status}\n"
+                f"- Ngày đặt: {created_at_fmt}\n"
+                f"- Tổng tiền: {total_fmt}\n"
+                f"- Người nhận: {full_name}\n"
+                f"- Email: {email}\n"
+                f"- Số điện thoại: {phone_num}\n"
+                f"- Địa chỉ giao hàng: {shipping_address}\n"
+                f"- Ghi chú: {note}\n"
+                f"- Mã đơn hàng duy nhất: {unique_code}\n"
+            )
+
         return response
+
     except Exception as e:
         logger.error(f"Error checking order: {e}")
         return "Đã xảy ra lỗi khi kiểm tra đơn hàng. Vui lòng thử lại sau."
-
 
 # Truy vấn thông tin chi tiết sản phẩm
 def extract_information_product(
