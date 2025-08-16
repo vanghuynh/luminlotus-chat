@@ -303,6 +303,7 @@ def check_order_status(
                 if image_url:
                     response += f"  - 🖼️ Hình ảnh: ![Image]({image_url})\n"
 
+
             # Sau đó mới tới thông tin đơn hàng
             response += (
                 f"- Trạng thái: {status}\n"
@@ -383,6 +384,7 @@ def extract_information_product(
         f"- Giá: {price:,.0f} {price_unit}\n"
         f"- Có sẵn: {stock}\n"
         f"- Mô tả: {desc}\n"
+        f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{first[0]})\n"
     )
     response += f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
     response += "\n🔄 **Các biến thể:**\n"
