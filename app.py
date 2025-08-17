@@ -10,12 +10,12 @@ load_dotenv()
 app = Flask(__name__)
 # CORS(app)
 
-# # Route hiển thị giao diện HTML
-# @app.route("/")
-# def index():
-#     return render_template("ui.html")  # File này nằm trong thư mục templates/
+# Route hiển thị giao diện HTML
+@app.route("/")
+def index():
+    return render_template("ui.html")  # File này nằm trong thư mục templates/
     
-# already_greeted = False
+already_greeted = False
 
 # @app.route("/chat", methods=["POST"])
 # def chat():
