@@ -167,7 +167,6 @@ def extract_query_product(
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock, images_url = p
-        # images_url = abs_image_url(images_url) # code mới thêm
         price_fmt = f"{price:,.0f} {price_unit}"
         response += (
             f"\n🧥 **{name}**\n"
@@ -175,10 +174,8 @@ def extract_query_product(
             f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
-            f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{pid})\n"
+            f"- [Xem chi tiết](https://aifshop.vercel.app/products/{pid})\n"
             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
-            # f"- [Xem chi tiết]({make_product_link(pid)})\n"
-            # f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
     return response
@@ -358,18 +355,13 @@ def extract_information_product(
         first[5],
         first[6],
     )
-    # Thêm đoạn code này 
-    # ✅ CHUẨN HOÁ ẢNH (MỚI)
-    # images_url = abs_image_url(images_url)
     response = f"🛍 **{name}**\n"
     response += (
         f"- Danh mục: {category}\n"
         f"- Giá: {price:,.0f} {price_unit}\n"
         f"- Có sẵn: {stock}\n"
         f"- Mô tả: {desc}\n"
-        f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{first[0]})\n"
-        # ✅ DÙNG HOST ĐỘNG
-        # f"- [Xem chi tiết]({make_product_link(first[0])})\n"
+        f"- [Xem chi tiết](https://aifshop.vercel.app/products/{first[0]})\n"
     )
     response += f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
     response += "\n🔄 **Các biến thể:**\n"
