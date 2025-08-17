@@ -21,59 +21,6 @@ conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
-# # ===================== (CHÈN MỚI) Ảnh & Link helpers =====================
-# # Ảnh của bạn nằm trong Supabase Storage (cột Product.images là ARRAY).
-# # Các biến ENV cần có:
-# #   SUPABASE_URL=https://<PROJECT-REF>.supabase.co
-# #   PUBLIC_STORAGE_BUCKET=products
-# #   PUBLIC_APP_HOST=https://luminlotus.onrender.com
-# SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")  # vd: https://abcxyz.supabase.co
-# PUBLIC_STORAGE_BUCKET = os.getenv("PUBLIC_STORAGE_BUCKET", "products")
-# PUBLIC_APP_HOST = os.getenv("PUBLIC_APP_HOST", "https://aifshop.vercel.app/")
-
-# def _supabase_public_base() -> str:
-#     if not SUPABASE_URL:
-#         return ""
-#     return f"{SUPABASE_URL}/storage/v1/object/public"
-
-# def abs_image_url(raw: str) -> str:
-#     """
-#     Chuẩn hoá URL ảnh về absolute:
-#     - http(s)://...                   -> giữ nguyên
-#     - /storage/v1/object/public/...   -> ghép SUPABASE_URL
-#     - bucket/path/to.jpg              -> SUPABASE_URL/storage/v1/object/public/bucket/path/to.jpg
-#     - chỉ file.jpg                    -> SUPABASE_URL/storage/v1/object/public/<PUBLIC_STORAGE_BUCKET>/file.jpg
-#     - /uploads/... hoặc path bắt đầu / -> ghép PUBLIC_APP_HOST
-#     - rỗng                            -> ''
-#     """
-#     if not raw:
-#         return ""
-#     u = str(raw).strip()
-
-#     if u.startswith("http://") or u.startswith("https://"):
-#         return u
-
-#     if u.startswith("/storage/v1/object/public/"):
-#         base = SUPABASE_URL.rstrip("/")
-#         return f"{base}{u}" if base else u
-
-#     if "/" in u and not u.startswith("/"):
-#         base = _supabase_public_base()
-#         return f"{base}/{u.lstrip('/')}" if base else f"{PUBLIC_APP_HOST}/{u.lstrip('/')}"
-
-#     if "." in u and "/" not in u:
-#         base = _supabase_public_base()
-#         return f"{base}/{PUBLIC_STORAGE_BUCKET}/{u}" if base else f"{PUBLIC_APP_HOST}/{u}"
-
-#     if u.startswith("/"):
-#         return f"{PUBLIC_APP_HOST}{u}"
-
-#     return u
-
-# def make_product_link(pid: str) -> str:
-#     return f"{PUBLIC_APP_HOST}/products/{pid}"
-# # =================== Hết block helpers (KHÔNG XOÁ GÌ CỦA BẠN) ============
-
 # Hàm gợi ý size dựa trên thông tin cơ thể của người dùng
 def predict_size_model(
     height: float,
@@ -101,7 +48,6 @@ def predict_size_model(
     )
     return result["recommended_size"]
 
-
 # Tìm kiếm sản phẩm dựa vào tiêu chí giá, size, màu.
 def extract_query_product(
     size: str = "",
@@ -128,11 +74,9 @@ def extract_query_product(
         list: Danh sách sản phẩm phù hợp dưới dạng markdown.
         Có kèm hình ảnh sản phẩm và link đến trang chi tiết sản phẩm.
     """
-
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
-
     sql = """
     SELECT 
         p.id,
@@ -211,7 +155,6 @@ def extract_query_product(
                 price_max = int("".join(filter(str.isdigit, parts[1])))
             except:
                 pass
-
     sql += " AND pp.price BETWEEN %s AND %s"
     params.extend([price_min, price_max])
     sql += " ORDER BY pp.price ASC LIMIT %s"
@@ -219,10 +162,8 @@ def extract_query_product(
     cursor.execute(sql, params)
     products = cursor.fetchall()
     pp(products)
-
     if not products:
         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
-
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock, images_url = p
@@ -239,7 +180,6 @@ def extract_query_product(
             # f"- [Xem chi tiết]({make_product_link(pid)})\n"
             # f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
-
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
     return response
 
@@ -258,7 +198,6 @@ def check_order_status(
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
-
     sql = """
         SELECT 
             o.id,
@@ -290,15 +229,12 @@ def check_order_status(
         sql += " AND a.phone ILIKE %s"
         params.append(f"%{phone}%")
     sql += ' ORDER BY o."createdAt" DESC LIMIT 3'
-
     try:
         cursor.execute(sql, params)
         orders = cursor.fetchall()
         if not orders:
             return "Không tìm thấy đơn hàng nào khớp với thông tin bạn cung cấp."
-
         response = "Tôi đã tìm thấy các đơn hàng của bạn với thông tin đã cung cấp:\n"
-
         for order in orders:
             (
                 order_db_id,
@@ -319,13 +255,11 @@ def check_order_status(
                 country_id,
                 unique_code,
             ) = order
-
             full_name = shipping_full_name.strip() if shipping_full_name else f"{first_name or ''} {last_name or ''}".strip()
             created_at_fmt = created_at.strftime("%d/%m/%Y")
             total_fmt = f"{total:,.0f} {price_unit}"
             note = note if note else "(không có ghi chú)"
             shipping_address = ", ".join([p for p in [street, ward, district, province] if p])
-
             # Lấy sản phẩm (dùng cách lấy hình như extract_query_product)
             item_sql = """
                 SELECT 
@@ -342,9 +276,7 @@ def check_order_status(
             """
             cursor.execute(item_sql, (order_db_id,))
             items = cursor.fetchall()
-
             response += f"\n**Đơn hàng #{unique_code}**\n"
-
             # Hiển thị sản phẩm trước, mỗi thuộc tính xuống dòng
             for name, size, color, quantity, price, image_url in items:
                 price_fmt = f"{price:,.0f} {price_unit}"
@@ -357,8 +289,6 @@ def check_order_status(
                 )
                 if image_url:
                     response += f"  - 🖼️ Hình ảnh: ![Image]({image_url})\n"
-
-
             # Sau đó mới tới thông tin đơn hàng
             response += (
                 f"- Trạng thái: {status}\n"
@@ -371,9 +301,7 @@ def check_order_status(
                 f"- Ghi chú: {note}\n"
                 f"- Mã đơn hàng duy nhất: {unique_code}\n"
             )
-
         return response
-
     except Exception as e:
         logger.error(f"Error checking order: {e}")
         return "Đã xảy ra lỗi khi kiểm tra đơn hàng. Vui lòng thử lại sau."
@@ -391,11 +319,9 @@ def extract_information_product(
     Returns:
         str: Kết quả thông tin chi tiết sản phẩm dưới dạng markdown.
     """
-
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
-
     sql = """
         SELECT 
             p.id,
@@ -423,7 +349,6 @@ def extract_information_product(
     rows = cursor.fetchall()
     if not rows:
         return f"Không tìm thấy sản phẩm nào khớp với từ khóa: {product_keyword}"
-
     first = rows[0]
     name, desc, price, stock, images_url, category = (
         first[1],
