@@ -21,6 +21,58 @@ conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
+# ===================== (CHÈN MỚI) Ảnh & Link helpers =====================
+# Ảnh của bạn nằm trong Supabase Storage (cột Product.images là ARRAY).
+# Các biến ENV cần có:
+#   SUPABASE_URL=https://<PROJECT-REF>.supabase.co
+#   PUBLIC_STORAGE_BUCKET=products
+#   PUBLIC_APP_HOST=https://luminlotus.onrender.com
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")  # vd: https://abcxyz.supabase.co
+PUBLIC_STORAGE_BUCKET = os.getenv("PUBLIC_STORAGE_BUCKET", "products")
+PUBLIC_APP_HOST = os.getenv("PUBLIC_APP_HOST", "https://aifshop.vercel.app/")
+
+def _supabase_public_base() -> str:
+    if not SUPABASE_URL:
+        return ""
+    return f"{SUPABASE_URL}/storage/v1/object/public"
+
+def abs_image_url(raw: str) -> str:
+    """
+    Chuẩn hoá URL ảnh về absolute:
+    - http(s)://...                   -> giữ nguyên
+    - /storage/v1/object/public/...   -> ghép SUPABASE_URL
+    - bucket/path/to.jpg              -> SUPABASE_URL/storage/v1/object/public/bucket/path/to.jpg
+    - chỉ file.jpg                    -> SUPABASE_URL/storage/v1/object/public/<PUBLIC_STORAGE_BUCKET>/file.jpg
+    - /uploads/... hoặc path bắt đầu / -> ghép PUBLIC_APP_HOST
+    - rỗng                            -> ''
+    """
+    if not raw:
+        return ""
+    u = str(raw).strip()
+
+    if u.startswith("http://") or u.startswith("https://"):
+        return u
+
+    if u.startswith("/storage/v1/object/public/"):
+        base = SUPABASE_URL.rstrip("/")
+        return f"{base}{u}" if base else u
+
+    if "/" in u and not u.startswith("/"):
+        base = _supabase_public_base()
+        return f"{base}/{u.lstrip('/')}" if base else f"{PUBLIC_APP_HOST}/{u.lstrip('/')}"
+
+    if "." in u and "/" not in u:
+        base = _supabase_public_base()
+        return f"{base}/{PUBLIC_STORAGE_BUCKET}/{u}" if base else f"{PUBLIC_APP_HOST}/{u}"
+
+    if u.startswith("/"):
+        return f"{PUBLIC_APP_HOST}{u}"
+
+    return u
+
+def make_product_link(pid: str) -> str:
+    return f"{PUBLIC_APP_HOST}/products/{pid}"
+# =================== Hết block helpers (KHÔNG XOÁ GÌ CỦA BẠN) ============
 
 # Hàm gợi ý size dựa trên thông tin cơ thể của người dùng
 def predict_size_model(
@@ -174,6 +226,7 @@ def extract_query_product(
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock, images_url = p
+        images_url = abs_image_url(images_url) # code mới thêm
         price_fmt = f"{price:,.0f} {price_unit}"
         response += (
             f"\n🧥 **{name}**\n"
@@ -181,7 +234,9 @@ def extract_query_product(
             f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
-            f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{pid})\n"
+            # f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{pid})\n"
+            # f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
+            f"- [Xem chi tiết]({make_product_link(pid)})\n"
             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
 
@@ -378,13 +433,18 @@ def extract_information_product(
         first[5],
         first[6],
     )
+    # Thêm đoạn code này 
+    # ✅ CHUẨN HOÁ ẢNH (MỚI)
+    images_url = abs_image_url(images_url)
     response = f"🛍 **{name}**\n"
     response += (
         f"- Danh mục: {category}\n"
         f"- Giá: {price:,.0f} {price_unit}\n"
         f"- Có sẵn: {stock}\n"
         f"- Mô tả: {desc}\n"
-        f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{first[0]})\n"
+        # f"- [Xem chi tiết](https://luminlotus.onrender.com/products/{first[0]})\n"
+        # ✅ DÙNG HOST ĐỘNG
+        f"- [Xem chi tiết]({make_product_link(first[0])})\n"
     )
     response += f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
     response += "\n🔄 **Các biến thể:**\n"
