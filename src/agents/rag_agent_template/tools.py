@@ -30,11 +30,10 @@ def predict_size_model(
     length_back: float = None,
     chest: float = None,
 ) -> str:
-    """Gợi ý size dựa trên thông tin cơ thể của người dùng. Nếu người dùng sử dụng tiếng anh thì đơn vị chiều cao là inch, cân nặng là pound, còn nếu người dùng sử dụng tiếng việt thì đơn vị chiều cao là cm, cân nặng là kg.
-    Hướng dẫn quy đổi để người dùng tính ròi nhập: 1 inch = 2.54 cm, 1 pound = 0.453592 kg.
+    """Gợi ý size dựa trên thông tin cơ thể của người dùng. 
     Args:
-        height (float): Chiều cao của người dùng. Nếu là tiếng việt thì đơn vị là cm, còn tiếng anh thì đơn vị là inch. Hướng dẫn quy đổi: 1 inch = 2.54 cm.
-        weight (float): Cân nặng của người dùng. Nếu là tiếng việt thì đơn vị là kg, còn tiếng anh thì đơn vị là pound. Hướng dẫn quy đổi: 1 pound = 0.453592 kg.
+        height (float): Chiều cao của người dùng.
+        weight (float): Cân nặng của người dùng. 
         gender (str): Giới tính của người dùng.
         age (Optional[int]): Tuổi của người dùng.
         length_back (float, optional): Chiều dài lưng của người dùng.

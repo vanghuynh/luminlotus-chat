@@ -13,7 +13,6 @@
       height: 100vh;
       margin: 0;
     }
-
     .chat-container {
       width: 400px;
       height: 600px;
@@ -24,7 +23,6 @@
       flex-direction: column;
       overflow: hidden;
     }
-
     .chat-header {
       padding: 15px;
       background-color: #4CAF50;
@@ -32,32 +30,40 @@
       text-align: center;
       font-size: 18px;
     }
-
     .chat-box {
       flex: 1;
       padding: 10px;
       overflow-y: auto;
+      background: #fafafa;
     }
-
     .user-msg {
       text-align: right;
       color: #333;
       margin: 10px 0;
     }
-
     .bot-msg {
       text-align: left;
-      color: #007BFF;
+      color: #222;
       margin: 10px 0;
+      line-height: 1.45;
+      white-space: normal;
     }
-
+    .bot-msg * { white-space: normal; }
+    .bot-msg p { margin: 6px 0; line-height: 1.5; }
+    .bot-msg img {
+      max-width: 100%;
+      max-height: 240px;
+      border-radius: 8px;
+      display: block;
+      margin-top: 6px;
+      object-fit: contain;
+    }
     .chat-input {
       display: flex;
       padding: 10px;
       border-top: 1px solid #ddd;
-      background-color: #fafafa;
+      background-color: #fff;
     }
-
     .chat-input input {
       flex: 1;
       padding: 10px;
@@ -65,7 +71,6 @@
       border-radius: 5px;
       outline: none;
     }
-
     .chat-input button {
       margin-left: 10px;
       padding: 10px 15px;
@@ -75,19 +80,8 @@
       border-radius: 5px;
       cursor: pointer;
     }
-
-    .chat-input button:hover {
-      background-color: #45a049;
-    }
-    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; margin-top:6px; }
-    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; }
-    .bot-msg div { line-height: 1.45; }
-    .bot-msg { color:#222; }
-    .bot-msg, .bot-msg * { white-space: normal; }
-    .bot-msg p { margin: 6px 0; line-height: 1.5; }
-    .bot-msg img { max-width: 100%; border-radius: 8px; display:block; margin-top:6px; }
+    .chat-input button:hover { background-color: #45a049; }
   </style>
-
   <!-- ✅ Markdown parser -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -102,6 +96,31 @@
   </div>
 
   <script>
+    // Tuỳ chọn Markdown
+    marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
+
+    function enhanceLinks(container) {
+      container.querySelectorAll('a').forEach(a => {
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+      });
+    }
+
+    function renderMessage(msg, from) {
+      const chatBox = document.getElementById("chat-box");
+      const div = document.createElement("div");
+      div.className = from === 'user' ? 'user-msg' : 'bot-msg';
+      const label = from === 'user' ? '<b>Bạn:</b> ' : '<b>AIFSHOP:</b> ';
+
+      // Luôn parse Markdown (giữ nguyên HTML hợp lệ trong chuỗi)
+      const body = marked.parse(msg || "");
+      div.innerHTML = label + body;
+
+      chatBox.appendChild(div);
+      enhanceLinks(div);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
     async function sendMessage() {
       const msgInput = document.getElementById("message");
       const msg = msgInput.value.trim();
@@ -113,63 +132,40 @@
       try {
         const res = await fetch("/chat", {
           method: "POST",
+          credentials: "include", // 👈 nếu backend dùng session
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg })
+          body: JSON.stringify({ message: msg, country_code: "VN" })
         });
-
         const data = await res.json();
         if (data.response) {
           renderMessage(data.response, 'bot');
         } else {
-          renderMessage(`❌ ${data.error}`, 'bot');
+          renderMessage(`❌ ${data.error || "Lỗi không xác định"}`, 'bot');
         }
-      } catch (err) {
+      } catch {
         renderMessage("❌ Không thể kết nối đến máy chủ.", 'bot');
       }
     }
 
     function handleKey(event) {
-      if (event.key === "Enter") {
-        sendMessage();
-      }
+      if (event.key === "Enter") sendMessage();
     }
 
-    // ✅ Hiển thị Markdown + xử lý xuống dòng đúng
-   function renderMessage(msg, from) {
-  const chatBox = document.getElementById("chat-box");
-  const div = document.createElement("div");
-  div.className = from === 'user' ? 'user-msg' : 'bot-msg';
-
-  const label = from === 'user' ? '<b>Bạn:</b> ' : '<b>AIFSHOP:</b> ';
-
-  // Có thẻ HTML ⇒ render nguyên dạng; Không có ⇒ Markdown
-  const looksLikeHTML = /<[^>]+>/.test(msg);
-  const body = looksLikeHTML ? msg : marked.parse(msg);
-
-  div.innerHTML = label + body;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
-}
-
     // 👋 Gửi lời chào khi mở chat
-    document.addEventListener("DOMContentLoaded", async function () {
+    document.addEventListener("DOMContentLoaded", async () => {
       try {
         const res = await fetch("/chat", {
           method: "POST",
+          credentials: "include", // 👈 gửi cookie để backend nhớ greeted
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: "init_greeting" })
+          body: JSON.stringify({ message: "init_greeting", country_code: "VN" })
         });
         const data = await res.json();
-        if (data.response) {
-          renderMessage(data.response, 'bot');
-        }
-      } catch (err) {
+        if (data.response) renderMessage(data.response, 'bot');
+      } catch {
         renderMessage("❌ Không thể kết nối đến máy chủ.", 'bot');
       }
     });
   </script>
-  <script>
-  marked.setOptions({ gfm: true, breaks: true });
-</script>
 </body>
 </html>
