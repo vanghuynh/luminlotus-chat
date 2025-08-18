@@ -48,11 +48,38 @@
       line-height: 1.45;
       white-space: normal;
     }
-    .bot-msg * { white-space: normal; }
-    .bot-msg p { margin: 6px 0; line-height: 1.5; }
-    .bot-msg img {
-      max-width: 100%;
-      max-height: 240px;
+    .bot-msg ul, .bot-msg ol {
+  padding-left: 20px;
+  margin: 8px 0;
+}
+
+.bot-msg li {
+  margin: 4px 0;
+}
+
+.bot-msg a {
+  color: #007BFF;
+  text-decoration: none;
+}
+
+.bot-msg a:hover {
+  text-decoration: underline;
+}
+
+.bot-msg img {
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 8px;
+  display: block;
+  margin-top: 6px;
+  object-fit: contain;
+}
+
+.bot-msg * { white-space: normal; }
+.bot-msg p { margin: 6px 0; line-height: 1.5; }
+.bot-msg img {
+  max-width: 100%;
+  max-height: 240px;
       border-radius: 8px;
       display: block;
       margin-top: 6px;
