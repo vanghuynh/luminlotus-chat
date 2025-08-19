@@ -40,6 +40,7 @@
       text-align: right;
       color: #333;
       margin: 10px 0;
+      white-space: pre-wrap;
     }
     .bot-msg {
       text-align: left;
@@ -94,6 +95,7 @@
     }
     .chat-input button:hover { background-color: #45a049; }
   </style>
+
   <!-- ✅ Markdown parser -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- ✅ DOMPurify for sanitizing HTML -->
@@ -110,7 +112,6 @@
   </div>
 
   <script>
-    // Tuỳ chọn Markdown
     marked.setOptions({ gfm: true, breaks: true, mangle: false, headerIds: false });
 
     function enhanceLinks(container) {
@@ -126,15 +127,13 @@
       div.className = from === 'user' ? 'user-msg' : 'bot-msg';
       const label = from === 'user' ? '<b>Bạn:</b> ' : '<b>AIFSHOP:</b> ';
 
-      // Parse Markdown
+      // Parse Markdown -> sanitize HTML
       let body = marked.parse(msg || "");
-      
-      // Sanitize the HTML output using DOMPurify
       body = DOMPurify.sanitize(body);
 
       div.innerHTML = label + body;
       chatBox.appendChild(div);
-      enhanceLinks(div); // Ensure all links open in a new tab
+      enhanceLinks(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
@@ -149,7 +148,6 @@
       try {
         const res = await fetch("/chat", {
           method: "POST",
-          credentials: "include", // 👈 nếu backend dùng session
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: msg, country_code: "VN" })
         });
@@ -168,19 +166,25 @@
       if (event.key === "Enter") sendMessage();
     }
 
-    // 👋 Gửi lời chào khi mở chat
+    // 👋 Gửi lời chào khi lần đầu load tab
     document.addEventListener("DOMContentLoaded", async () => {
-      try {
-        const res = await fetch("/chat", {
-          method: "POST",
-          credentials: "include", // 👈 gửi cookie để backend nhớ greeted
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: "init_greeting", country_code: "VN" })
-        });
-        const data = await res.json();
-        if (data.response) renderMessage(data.response, 'bot');
-      } catch {
-        renderMessage("❌ Không thể kết nối đến máy chủ.", 'bot');
+      const greetedKey = "aifshop_greeted_session";
+
+      if (!sessionStorage.getItem(greetedKey)) {
+        try {
+          const res = await fetch("/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: "init_greeting", country_code: "VN" })
+          });
+          const data = await res.json();
+          if (data.response) {
+            renderMessage(data.response, 'bot');
+            sessionStorage.setItem(greetedKey, "1");
+          }
+        } catch {
+          renderMessage("❌ Không thể kết nối đến máy chủ.", 'bot');
+        }
       }
     });
   </script>
