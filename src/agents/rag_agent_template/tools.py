@@ -21,31 +21,30 @@ conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
-# Hàm gợi ý size dựa trên thông tin cơ thể của người dùng
 def predict_size_model(
-    height: float,
-    weight: float,
-    gender: str,
-    age: int,
-    length_back: float = None,
-    chest: float = None,
+    height, weight, gender, age=None, length_back=None, chest=None, ngang_vai=None, vong_eo=None
 ) -> str:
-    """Gợi ý size dựa trên thông tin cơ thể của người dùng. 
+    """Gợi ý size dựa trên thông tin cơ thể của người dùng.
+      Nếu người dùng không nhập age, length_back, chest, ngang_vai, vong_eo thì hãy hỏi thêm. Nếu không có thì bỏ qua.
     Args:
         height (float): Chiều cao của người dùng.
         weight (float): Cân nặng của người dùng. 
         gender (str): Giới tính của người dùng.
         age (Optional[int]): Tuổi của người dùng.
-        length_back (float, optional): Chiều dài lưng của người dùng.
-        chest (float, optional): Vòng ngực của người dùng.
+        length_back (int, optional): Chiều dài lưng của người dùng.
+        chest (int, optional): Vòng ngực của người dùng.
+        ngang_vai (int, optional): Độ dài vai của người dùng.
+        vong_eo (int, optional): Vòng eo của người dùng.
     Returns:
         str: Kết quả gợi ý size.
     """
     # Dự đoán size
     result = predict_size(
-        height, weight, gender, age=age, length_back=length_back, chest=chest
+        height, weight, gender, age=age, length_back=length_back, chest=chest, ngang_vai=ngang_vai, vong_eo=vong_eo
     )
-    return result["recommended_size"]
+    return result
+
+
 
 # Tìm kiếm sản phẩm dựa vào tiêu chí giá, size, màu.
 def extract_query_product(
