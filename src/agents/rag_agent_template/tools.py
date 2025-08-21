@@ -6,7 +6,7 @@ from src.utils.logger import logger
 from langchain_core.runnables import RunnableConfig
 from langchain_experimental.utilities import PythonREPL
 from langchain_community.tools import DuckDuckGoSearchRun
-from src.utils.rcmsizetool import predict_size
+from src.utils.rcmsizetool import predict_size_public
 import psycopg2
 import re
 from dotenv import load_dotenv
@@ -21,29 +21,29 @@ conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
-def predict_size_model(
-    height, weight, gender, chest=None, waist=None, shoulder=None
-) -> str:
-    """Gợi ý size dựa trên thông tin cơ thể của người dùng.
-      Nếu người dùng không nhập age, length_back, chest, ngang_vai, vong_eo thì hãy hỏi thêm. Nếu không có thì bỏ qua.
-    Args:
-        height (float): Chiều cao của người dùng.
-        weight (float): Cân nặng của người dùng. 
-        gender (str): Giới tính của người dùng.
-        age (Optional[int]): Tuổi của người dùng.
-        length_back (int, optional): Chiều dài lưng của người dùng.
-        chest (int, optional): Vòng ngực của người dùng.
-        ngang_vai (int, optional): Độ dài vai của người dùng.
-        vong_eo (int, optional): Vòng eo của người dùng.
-    Returns:
-        str: Kết quả gợi ý size.
+# Hàm gợi ý size
+def predict_size_model(user_height_text: str, user_weight_text: str,
+                        user_gender_text: str, user_fit_text: str = "vừa") -> str:
     """
-    # Dự đoán size
-    result = predict_size(
-        height, weight, gender, chest=chest, waist=waist, shoulder=shoulder
-    )
-    return result
+    Gợi ý size dựa vào chiều cao, cân nặng, giới tính, phong cách mặc (ôm, vừa, rộng)
+    Args:
+        height : chiều cao của người dùng
+        weight: cân nặng của người dùng
+        gender : giới tính của người dùng
+        fit : phong cách như ôm, vừa, rộng
+    """
+    # Parse số “165cm”, “50kg” thành float
+    import re
+    h_match = re.search(r"(\d+(?:\.\d+)?)\s*cm", user_height_text.lower())
+    w_match = re.search(r"(\d+(?:\.\d+)?)\s*kg", user_weight_text.lower())
+    if not h_match or not w_match:
+        return "Vui lòng cung cấp chiều cao (cm) và cân nặng (kg)."
 
+    height = float(h_match.group(1))
+    weight = float(w_match.group(1))
+
+    base, final = predict_size_public(user_gender_text, height, weight, user_fit_text, True)
+    return f"Size cơ bản: {base}. Theo phong cách '{user_fit_text}': {final}."
 
 
 # Tìm kiếm sản phẩm dựa vào tiêu chí giá, size, màu.

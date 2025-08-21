@@ -1,0 +1,18 @@
+{
+  "best_model_name": "rf",
+  "cv_f1_macro": 0.9742735507518638,
+  "classes": [
+    "L",
+    "M",
+    "S",
+    "XL",
+    "XS",
+    "XXL"
+  ],
+  "features": [
+    "gender_code",
+    "height_cm",
+    "weight_kg",
+    "fit_preference"
+  ]
+}
