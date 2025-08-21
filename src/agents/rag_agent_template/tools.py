@@ -22,7 +22,7 @@ conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
 
 def predict_size_model(
-    height, weight, gender, age=None, length_back=None, chest=None, ngang_vai=None, vong_eo=None
+    height, weight, gender, chest=None, waist=None, shoulder=None
 ) -> str:
     """Gợi ý size dựa trên thông tin cơ thể của người dùng.
       Nếu người dùng không nhập age, length_back, chest, ngang_vai, vong_eo thì hãy hỏi thêm. Nếu không có thì bỏ qua.
@@ -40,7 +40,7 @@ def predict_size_model(
     """
     # Dự đoán size
     result = predict_size(
-        height, weight, gender, age=age, length_back=length_back, chest=chest, ngang_vai=ngang_vai, vong_eo=vong_eo
+        height, weight, gender, chest=chest, waist=waist, shoulder=shoulder
     )
     return result
 
