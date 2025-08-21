@@ -70,8 +70,7 @@ def predict_size(height, weight, gender, chest=None, waist=None, shoulder=None):
     pred_encoded = pipeline.predict(input_df)[0]
     pred_label = label_encoder.inverse_transform([pred_encoded])[0]
     size_info = size_description[gender][pred_label]
-    return pred_label, size_info['target_audience'], size_info['style']
-
+    return pred_label, size_info['target_audience']
 # Chạy local bằng giao diện dòng lệnh
 if __name__ == "__main__":
     try:
