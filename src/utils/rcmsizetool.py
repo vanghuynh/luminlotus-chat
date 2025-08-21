@@ -15,20 +15,20 @@ label_encoder = joblib.load(os.path.abspath(encoder_path))
 
 size_description = {
     'nữ': {
-        'XS': {"target_audience": "Vóc dáng nhỏ nhắn, mảnh mai, muốn áo ôm gọn.", "style": "Ôm vừa phải, tôn dáng gọn gàng, năng động."},
-        'S': {"target_audience": "Thích mặc áo rộng rãi, thoải mái hơn size XS, hoặc dáng người vừa phải.", "style": "Trẻ trung, thoải mái, dễ phối đồ."},
-        'M': {"target_audience": "Phù hợp với đa số nữ giới muốn sự thoải mái.", "style": "Rộng vừa phải, thoải mái tối đa, che khuyết điểm nhẹ."},
-        'L': {"target_audience": "Thích mặc rộng rãi, thoải mái hoặc có vóc dáng đầy đặn hơn.", "style": "Tạo sự thoải mái tối đa, phóng khoáng, có thể mặc dáng oversized nhẹ."},
-        'XL': {"target_audience": "Rất cao, hoặc muốn mặc áo thật rộng rãi, phom phóng khoáng.", "style": "Thoải mái tối đa, phom dáng rộng, phù hợp phong cách cá tính."},
-        '2XL': {"target_audience": "Vóc dáng lớn hoặc rất cao, muốn mặc áo siêu rộng (oversized).", "style": "Thoải mái vượt trội, phong cách độc đáo, ấn tượng."}
+        'XS': {"target_audience": "Vóc dáng nhỏ nhắn, mảnh mai, muốn áo ôm gọn."},
+        'S': {"target_audience": "Thích mặc áo rộng rãi, thoải mái hơn size XS, hoặc dáng người vừa phải."},
+        'M': {"target_audience": "Phù hợp với đa số nữ giới muốn sự thoải mái."},
+        'L': {"target_audience": "Thích mặc rộng rãi, thoải mái hoặc có vóc dáng đầy đặn hơn."},
+        'XL': {"target_audience": "Rất cao, hoặc muốn mặc áo thật rộng rãi, phom phóng khoáng."},
+        '2XL': {"target_audience": "Vóc dáng lớn hoặc rất cao, muốn mặc áo siêu rộng (oversized)."}
     },
     'nam': {
-        'XS': {"target_audience": "Rất gầy, thích mặc áo ôm sát người.", "style": "Ôm sát, tôn lên vóc dáng gọn gàng."},
-        'S': {"target_audience": "Vóc dáng vừa phải, thích mặc áo ôm vừa vặn.", "style": "Lịch sự, gọn gàng, năng động."},
-        'M': {"target_audience": "Phù hợp với đa số nam giới, muốn áo vừa vặn, thoải mái.", "style": "Vừa vặn, không quá ôm cũng không quá rộng, năng động."},
-        'L': {"target_audience": "Vóc dáng trung bình khá đến đầy đặn, muốn áo rộng rãi.", "style": "Thoải mái, phóng khoáng, dễ vận động."},
-        'XL': {"target_audience": "Vóc dáng cao to.", "style": "Rộng rãi, thoải mái tối đa, phù hợp phong cách Streetwear."},
-        '2XL': {"target_audience": "Vóc dáng lớn, cao trên 1m80 và/hoặc cân nặng trên 100kg.", "style": "Thoải mái vượt trội, phong cách thể thao hoặc cá tính mạnh mẽ."}
+        'XS': {"target_audience": "Rất gầy, thích mặc áo ôm sát người."},
+        'S': {"target_audience": "Vóc dáng vừa phải, thích mặc áo ôm vừa vặn."},
+        'M': {"target_audience": "Phù hợp với đa số nam giới, muốn áo vừa vặn, thoải mái."},
+        'L': {"target_audience": "Vóc dáng trung bình khá đến đầy đặn, muốn áo rộng rãi."},
+        'XL': {"target_audience": "Vóc dáng cao to."},
+        '2XL': {"target_audience": "Vóc dáng lớn, cao trên 1m80 và/hoặc cân nặng trên 100kg."}
     }
 }
 
@@ -92,9 +92,8 @@ if __name__ == "__main__":
             waist = float(waist_input) if waist_input else None
 
             # Dự đoán
-            result, target_audience, style = predict_size(height, weight, gender, chest, waist, shoulder)
+            result, target_audience = predict_size(height, weight, gender, chest, waist, shoulder)
             print(f"\n🎯 Recommended size: {result.upper()}")
             print(f"👥 Target audience: {target_audience}")
-            print(f"👗 Style: {style}")
     except Exception as e:
         print("❌ Lỗi khi nhập hoặc xử lý dữ liệu:", e)

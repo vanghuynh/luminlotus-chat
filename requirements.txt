@@ -31,5 +31,9 @@ flask_cors
 pandas
 joblib
 catboost
-scikit-learn
+scikit-learn==1.6.1
 psycopg2-binary
+flask-cors
+numpy
+gunicorn
+matplotlib
