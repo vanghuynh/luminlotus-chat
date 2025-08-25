@@ -6,7 +6,7 @@ from src.utils.logger import logger
 from langchain_core.runnables import RunnableConfig
 from langchain_experimental.utilities import PythonREPL
 from langchain_community.tools import DuckDuckGoSearchRun
-from src.utils.rcmsizetool import predict_size_public
+from src.utils.rcmsizetool import predict_size_public_text
 import psycopg2
 import re
 from dotenv import load_dotenv
@@ -14,16 +14,18 @@ import os
 import json
 from flask import request
 from urllib.parse import quote
+from typing import Optional, Tuple
+
 duckduckgo_search = DuckDuckGoSearchRun()
 python_exec = PythonREPL()
 load_dotenv()
 conn_str = os.getenv("SUPABASE_DB_URL")
 conn = psycopg2.connect(conn_str)
 cursor = conn.cursor()
+BASE_URL = os.getenv("PRODUCT_BASE_URL")
 
 # Hàm gợi ý size
-def predict_size_model(user_height_text: str, user_weight_text: str,
-                        user_gender_text: str, user_fit_text: str = "vừa") -> str:
+def predict_size_model(user_text: str) -> str:
     """
     Gợi ý size dựa vào chiều cao, cân nặng, giới tính, phong cách mặc (ôm, vừa, rộng)
     Args:
@@ -32,21 +34,9 @@ def predict_size_model(user_height_text: str, user_weight_text: str,
         gender : giới tính của người dùng
         fit : phong cách như ôm, vừa, rộng
     """
-    # Parse số “165cm”, “50kg” thành float
-    import re
-    h_match = re.search(r"(\d+(?:\.\d+)?)\s*cm", user_height_text.lower())
-    w_match = re.search(r"(\d+(?:\.\d+)?)\s*kg", user_weight_text.lower())
-    if not h_match or not w_match:
-        return "Vui lòng cung cấp chiều cao (cm) và cân nặng (kg)."
+    return predict_size_public_text(user_text)
 
-    height = float(h_match.group(1))
-    weight = float(w_match.group(1))
-
-    base, final = predict_size_public(user_gender_text, height, weight, user_fit_text, True)
-    return f"Size cơ bản: {base}. Theo phong cách '{user_fit_text}': {final}."
-
-
-# Tìm kiếm sản phẩm dựa vào tiêu chí giá, size, màu.
+# Tìm kiếm sản phẩm
 def extract_query_product(
     size: str = "",
     color: str = "",
@@ -58,23 +48,12 @@ def extract_query_product(
     category_name: str = "",
 ) -> list:
     """
-    Truy vấn sản phẩm theo kích cỡ, màu sắc, khoảng giá, còn hàng và giá theo quốc gia, danh mục sản phẩm là thời trang nam hoặc thời trang nữ.
-    Args:
-        size (str): Kích cỡ sản phẩm.
-        color (str): Màu sắc sản phẩm.
-        price_range (str): Khoảng giá sản phẩm. Nếu là tiếng việt (Việt Nam) thì truy vấn giá theo quốc gia Việt Nam, còn tiếng anh (Mỹ) thì truy vấn giá theo quốc gia Mỹ. Ví dụ nếu là tiếng việt thì có thể là " dưới 500k", "trên 500K", "khoảng 200k", "từ 200-500k", còn nếu tiếng anh thì có thể là "under 50$", "over 500$", "about 200$", "from 200-500$".
-        in_stock (bool): Chỉ lấy sản phẩm còn hàng.
-        limit (int): Số lượng sản phẩm trả về.
-        country_code (str): Mã quốc gia để lấy giá theo quốc gia.
-        lang (str): Ngôn ngữ của người dùng, ảnh hưởng đến cách hiển thị kết quả.
-        category_name (str): Tên danh mục sản phẩm để lọc kết quả. Ví dụ: thời trang nam, thời trang nữ.
-    Returns:
-        list: Danh sách sản phẩm phù hợp dưới dạng markdown.
-        Có kèm hình ảnh sản phẩm và link đến trang chi tiết sản phẩm.
+    Truy vấn sản phẩm
     """
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
+
     sql = """
     SELECT 
         p.id,
@@ -93,86 +72,100 @@ def extract_query_product(
     WHERE 1=1
     """
     params = []
-    # ✅ Lọc quốc gia
+    # Lọc quốc gia
     sql += " AND c.code = %s"
     params.append(country_code)
-    # ✅ Lọc theo category name
-    if category_name:
-        sql += " AND cat.name ILIKE %s"
-        params.append(f"%{category_name.strip()}%")
-    # Lọc theo size
-    if size:
-        sql += " AND v.size ILIKE %s"
-        params.append(f"%{size.strip()}%")
-    # Lọc theo màu sắc
-    if color:
-        sql += " AND v.color ILIKE %s"
-        params.append(f"%{color.strip()}%")
-    # Lọc theo còn hàng
+    # Lọc còn hàng
     if in_stock:
         sql += " AND v.stock > 0"
-    # Lọc theo khoảng giá theo quốc gia
-    price_min = 0
-    price_max = 1e9
+    # Cờ xem có filter nào không
+    has_filters = False
+
+    # Lọc danh mục
+    if category_name:
+        has_filters = True
+        sql += " AND cat.name ILIKE %s"
+        params.append(f"%{category_name.strip()}%")
+    # Lọc size
+    if size:
+        has_filters = True
+        sql += " AND v.size ILIKE %s"
+        params.append(f"%{size.strip()}%")
+    # Lọc màu
+    if color:
+        has_filters = True
+        sql += " AND v.color ILIKE %s"
+        params.append(f"%{color.strip()}%")
+
+    # Chỉ thêm điều kiện giá nếu có price_range
     if price_range:
+        has_filters = True
+        price_min = 0
+        price_max = 1e9
         t = price_range.lower().replace(".", "").replace(",", "")
         t = t.replace("tr", "000000").replace("k", "000")  
-        t = re.sub(r"[^\d\-]", " ", t)  
+        t = re.sub(r"[^\d\-]", " ", t)
         digits = [int(s) for s in t.split() if s.isdigit()]
-        if "dưới" in t and digits:
+
+        if "dưới" in price_range and digits:
             price_max = digits[0]
-        elif "trên" in t and digits:
-            price_min = digits[0] * 4
-        elif "khoảng" in t and len(digits) == 1:
+        elif "trên" in price_range and digits:
+            price_min = digits[0]
+        elif "khoảng" in price_range and len(digits) == 1:
             price_min = price_max = digits[0]
-        elif "từ" in t and "-" in t:
+        elif "từ" in price_range and "-" in price_range:
             try:
-                parts = t.split("-")
+                parts = price_range.split("-")
                 price_min = int("".join(filter(str.isdigit, parts[0])))
                 price_max = int("".join(filter(str.isdigit, parts[1])))
             except:
                 pass
-        elif "under" in t and digits:
+        elif "under" in price_range and digits:
             price_max = digits[0]
-        elif "over" in t and digits:
-            price_min = digits[0] * 4
-        elif "about" in t and digits:
+        elif "over" in price_range and digits:
+            price_min = digits[0]
+        elif "about" in price_range and digits:
             price_min = price_max = digits[0]
-            price_min *= 4
-        elif "from" in t and "-" in t:
+        elif "from" in price_range and "-" in price_range:
             try:
-                parts = t.split("-")
+                parts = price_range.split("-")
                 price_min = int("".join(filter(str.isdigit, parts[0])))
                 price_max = int("".join(filter(str.isdigit, parts[1])))
             except:
                 pass
-        elif "-" in t:
+        elif "-" in price_range:
             try:
-                parts = t.split("-")
+                parts = price_range.split("-")
                 price_min = int("".join(filter(str.isdigit, parts[0])))
                 price_max = int("".join(filter(str.isdigit, parts[1])))
             except:
                 pass
-    sql += " AND pp.price BETWEEN %s AND %s"
-    params.extend([price_min, price_max])
-    sql += " ORDER BY pp.price ASC LIMIT %s"
+        sql += " AND pp.price BETWEEN %s AND %s"
+        params.extend([price_min, price_max])
+    if not has_filters:
+        # Không có điều kiện nào → lấy 5 sản phẩm mới nhất
+        sql += ' ORDER BY p."createdAt" DESC, p.id DESC LIMIT %s'
+    else:
+        # Khi có filter → ưu tiên giá tăng dần rồi mới đến ngày tạo
+        sql += ' ORDER BY COALESCE(pp.price, p.price) ASC, p."createdAt" DESC LIMIT %s'
     params.append(limit)
+
     cursor.execute(sql, params)
     products = cursor.fetchall()
-    pp(products)
     if not products:
         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
+
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock, images_url = p
         price_fmt = f"{price:,.0f} {price_unit}"
         response += (
             f"\n🧥 **{name}**\n"
-            f"- Danh mục: {category_name}\n"
+            f"- Danh mục: {category_name or 'Chưa rõ'}\n"
             f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
-            f"- [Xem chi tiết](https://aifshop.vercel.app/products/{pid})\n"
+            f"- [Xem chi tiết]({BASE_URL}/{pid})\n"
             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
@@ -323,7 +316,6 @@ def extract_information_product(
             p.name,
             p.description,
             pp.price AS country_price,
-            p.stock,
             p.images[1] AS image_url,
             c.name AS category_name,
             v.id AS variant_id,
@@ -345,31 +337,31 @@ def extract_information_product(
     if not rows:
         return f"Không tìm thấy sản phẩm nào khớp với từ khóa: {product_keyword}"
     first = rows[0]
-    name, desc, price, stock, images_url, category = (
+    name, desc, price, images_url, category = (
         first[1],
         first[2],
         first[3],
         first[4],
         first[5],
-        first[6],
     )
+    header_variant_stock = first[9]
     response = f"🛍 **{name}**\n"
     response += (
         f"- Danh mục: {category}\n"
         f"- Giá: {price:,.0f} {price_unit}\n"
-        f"- Có sẵn: {stock}\n"
+        f"- Có sẵn: {header_variant_stock}\n"
         f"- Mô tả: {desc}\n"
-        f"- [Xem chi tiết](https://aifshop.vercel.app/products/{first[0]})\n"
+        f"- [Xem chi tiết]({BASE_URL}/{first[0]})\n"
     )
     response += f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
     response += "\n🔄 **Các biến thể:**\n"
     for row in rows:
         response += (
-            f"* Màu: {row[8]} \n"
-            f"  Size: {row[9]} – \n"
-            f"  SKU: {row[11]} – \n"
-            f"  Có sẵn: {row[10]} – \n"
-            f"  Nặng: {row[12]}kg\n"
+            f"* Màu: {row[7]} \n"
+            f"  Size: {row[8]} – \n"
+            f"  SKU: {row[10]} – \n"
+            f"  Có sẵn: {row[9]} – \n"
+            f"  Nặng: {row[11]}kg\n"
         )
     return response
 

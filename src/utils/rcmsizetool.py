@@ -1,7 +1,7 @@
 import joblib
 import numpy as np
 import os
-
+import re
 OUTPUT_DIR = "./src/model"
 
 # Load model
@@ -64,6 +64,80 @@ def predict_size_public(gender_text: str, height_cm: float, weight_kg: float,
     fit_code = _fit_text_to_code(fit_text)   # nhận cả "vừa/regular", "ôm/slim", "rộng/loose"
     return predict_size_with_fit(gender_text, height_cm, weight_kg, fit_code, apply_fit_rule)
 
+# ----------------- Hàm public nhận input tự do -----------------
+def _parse_height(text: str):
+    t = text.lower().replace(",", ".").strip()
+
+    # dạng 1m60, 1m 75, 1.75m
+    m = re.search(r"(\d+(?:\.\d+)?)\s*m\s*(\d+)?", t)
+    if m:
+        meters = float(m.group(1))
+        extra = m.group(2)
+        if extra:
+            return meters * 100 + float(extra)
+        return meters * 100
+
+    # dạng 170cm
+    cm = re.search(r"(\d+(?:\.\d+)?)\s*cm", t)
+    if cm:
+        return float(cm.group(1))
+
+    # số trần
+    only = re.search(r"\b(\d+(?:\.\d+)?)\b", t)
+    if only:
+        v = float(only.group(1))
+        if v >= 100: return v
+        if v < 3:   return v * 100
+    return None
+
+def _parse_weight(text: str):
+    t = text.lower().replace(",", ".").strip()
+
+    # dạng 60kg, 60kgs, 60 ký, 60 kilo
+    w = re.search(r"(\d+(?:\.\d+)?)(?:\s*(kg|kgs|ký|kí|kilo|kilogram))", t)
+    if w:
+        return float(w.group(1))
+
+    # dạng gram
+    g = re.search(r"(\d+(?:\.\d+)?)\s*g(ram)?", t)
+    if g:
+        return float(g.group(1)) / 1000
+
+    # số trần
+    only = re.search(r"\b(\d+(?:\.\d+)?)\b", t)
+    if only:
+        return float(only.group(1))
+    return None
+
+def _parse_fit(text: str):
+    t = text.lower()
+    if any(k in t for k in ["ôm", "om", "slim", "fitted", "tight"]):
+        return "ôm"
+    if any(k in t for k in ["rộng", "rong", "loose", "oversize", "oversized", "baggy"]):
+        return "rộng"
+    return "vừa"
+
+def predict_size_public_text(user_text: str) -> str:
+    """
+    Nhận input tự do: "1m60 nam 60kg", "nữ cao 1,65m nặng 50 ký mặc rộng"
+    Trả về chuỗi kết quả size.
+    """
+    height = _parse_height(user_text)
+    weight = _parse_weight(user_text)
+    gender = _normalize_gender(user_text)
+    fit = _parse_fit(user_text)
+
+    if height is None or weight is None:
+        return "Vui lòng cung cấp chiều cao (m/cm) và cân nặng (kg)."
+
+    base, final = predict_size_public(gender, height, weight, fit, True)
+    return f"Size cơ bản: {base}. Theo phong cách '{fit}': {final}."
+
+
+
+
+
+#________________Test nhận input từ local_________________
 if __name__ == "__main__":
     try:
         print("📏 Dự đoán Size Áo (Dùng mô hình mở rộng)")
