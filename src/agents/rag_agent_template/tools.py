@@ -173,13 +173,12 @@ def extract_query_product(
 
 # Trích xuất kiểm tra đơn hàng
 def check_order_status(
-    order_id: str = "", phone: str = "", country_code: str = "", lang: str = ""
+    order_id: str = "", country_code: str = "", lang: str = ""
 ) -> str:
     """
-    Kiểm tra tình trạng đơn hàng và hiển thị chi tiết từng đơn hàng kèm thông tin khách hàng và sản phẩm theo số điện thoại hoặc mã đơn hàng.
+    Kiểm tra tình trạng đơn hàng và hiển thị chi tiết từng đơn hàng kèm thông tin khách hàng và sản phẩm theo mã đơn hàng.
     Args:
         order_id (str): Mã đơn hàng của đơn hàng.
-        phone (str): Số điện thoại của khách hàng.
     Returns:
         str: Kết quả kiểm tra đơn hàng dưới dạng markdown.
     """
@@ -213,10 +212,6 @@ def check_order_status(
     if order_id:
         sql += ' AND o."uniqueCode" ILIKE %s'
         params.append(f"%{order_id}%")
-    if phone:
-        sql += " AND a.phone ILIKE %s"
-        params.append(f"%{phone}%")
-    sql += ' ORDER BY o."createdAt" DESC LIMIT 3'
     try:
         cursor.execute(sql, params)
         orders = cursor.fetchall()

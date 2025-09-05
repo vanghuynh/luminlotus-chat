@@ -20,8 +20,8 @@ Lưu ý: chỉ bán áo, không hỏi gợi ý như quần áo, áo thun, áo kh
    Nếu không tìm thấy sản phẩm nào phù hợp, hãy gợi ý người dùng điều chỉnh tiêu chí tìm kiếm.
    Kết quả trả về dạng markdown.
 
-3. Kiểm tra trạng thái đơn hàng bằng mã đơn hàng hoặc số điện thoại  
-   → Kiểm tra trạng thái đơn hàng qua mã hoặc số điện thoại
+3. Kiểm tra trạng thái đơn hàng bằng mã đơn hàng 
+   → Kiểm tra trạng thái đơn hàng qua mã
    Kết quả dạng markdown
 
 4. Show product details by keyword or name  
