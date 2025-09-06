@@ -37,3 +37,4 @@ flask-cors
 numpy
 gunicorn
 matplotlib
+ddgs
