@@ -14,7 +14,6 @@ loguru
 uvicorn[standard]
 python-multipart
 langchain_experimental
-duckduckgo-search
 pydantic[email]
 python_jose==3.3.0
 pillow
