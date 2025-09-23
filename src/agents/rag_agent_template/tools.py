@@ -36,7 +36,34 @@ def predict_size_model(user_text: str) -> str:
     """
     return predict_size_public_text(user_text)
 
-# Tìm kiếm sản phẩm
+
+# Hàm chuẩn hóa đầu và tìm kiếm sản phẩm
+# ==== Chuẩn hóa input ====
+def normalize_size(size: str) -> str:
+    if not size:
+        return ""
+    return size.strip().upper()  # luôn đưa về in hoa, ví dụ "l" -> "L"
+
+def normalize_category(category: str) -> str:
+    if not category:
+        return ""
+    category = category.strip().lower()
+    mapping = {
+        "nam": "Thời trang nam",
+        "thời trang nam": "Thời trang nam",
+        "nữ": "Thời trang nữ",
+        "thời trang nữ": "Thời trang nữ",
+        "THỜI TRANG NAM": "Thời trang nam",
+        "THỜI TRANG NỮ": "Thời trang nữ",
+        "NAM": "Thời trang nam",
+        "NỮ": "Thời trang nữ",
+        "Nam": "Thời trang nam",
+        "Nữ": "Thời trang nữ",
+    }
+    return mapping.get(category, category.title())  # fallback: viết hoa chữ cái đầu
+
+
+# ==== Hàm tìm kiếm sản phẩm ====
 def extract_query_product(
     size: str = "",
     color: str = "",
@@ -46,10 +73,14 @@ def extract_query_product(
     country_code: str = "",
     lang: str = "",
     category_name: str = "",
-) -> list:
+) -> str:
     """
-    Truy vấn sản phẩm
+    Truy vấn sản phẩm theo điều kiện linh hoạt
     """
+    # Chuẩn hóa input
+    size = normalize_size(size)
+    category_name = normalize_category(category_name)
+
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
     price_unit = "$" if lang == "en" else "VND"
@@ -72,38 +103,41 @@ def extract_query_product(
     WHERE 1=1
     """
     params = []
+
     # Lọc quốc gia
     sql += " AND c.code = %s"
     params.append(country_code)
+
     # Lọc còn hàng
     if in_stock:
         sql += " AND v.stock > 0"
-    # Cờ xem có filter nào không
+
     has_filters = False
 
     # Lọc danh mục
     if category_name:
         has_filters = True
-        sql += " AND cat.name ILIKE %s"
-        params.append(f"%{category_name.strip()}%")
+        sql += " AND LOWER(cat.name) LIKE %s"
+        params.append(f"%{category_name.lower()}%")
+
     # Lọc size
     if size:
         has_filters = True
-        sql += " AND v.size ILIKE %s"
-        params.append(f"%{size.strip()}%")
+        sql += " AND UPPER(v.size) = %s"
+        params.append(size)
+
     # Lọc màu
     if color:
         has_filters = True
-        sql += " AND v.color ILIKE %s"
-        params.append(f"%{color.strip()}%")
+        sql += " AND LOWER(v.color) = %s"
+        params.append(color.lower())
 
-    # Chỉ thêm điều kiện giá nếu có price_range
+    # Lọc giá
     if price_range:
         has_filters = True
-        price_min = 0
-        price_max = 1e9
+        price_min, price_max = 0, 1e9
         t = price_range.lower().replace(".", "").replace(",", "")
-        t = t.replace("tr", "000000").replace("k", "000")  
+        t = t.replace("tr", "000000").replace("k", "000")
         t = re.sub(r"[^\d\-]", " ", t)
         digits = [int(s) for s in t.split() if s.isdigit()]
 
@@ -142,34 +176,172 @@ def extract_query_product(
                 pass
         sql += " AND pp.price BETWEEN %s AND %s"
         params.extend([price_min, price_max])
+
+    # Sắp xếp
     if not has_filters:
-        # Không có điều kiện nào → lấy 5 sản phẩm mới nhất
         sql += ' ORDER BY p."createdAt" DESC, p.id DESC LIMIT %s'
     else:
-        # Khi có filter → ưu tiên giá tăng dần rồi mới đến ngày tạo
         sql += ' ORDER BY COALESCE(pp.price, p.price) ASC, p."createdAt" DESC LIMIT %s'
     params.append(limit)
 
+    # Thực thi query
     cursor.execute(sql, params)
     products = cursor.fetchall()
+
     if not products:
         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
 
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
         pid, name, price, size, color, sku, stock, images_url = p
-        price_fmt = f"{price:,.0f} {price_unit}"
+        price_fmt = f"{price:,.0f} {price_unit}" if price else "Liên hệ"
         response += (
             f"\n🧥 **{name}**\n"
             f"- Danh mục: {category_name or 'Chưa rõ'}\n"
             f"- 💰 Giá: {price_fmt}\n"
-            f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
-            f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
+            f"- 🎨 Màu: {color or 'Chưa rõ'} | 📏 Size: {size or 'Chưa rõ'}\n"
+            f"- 🔢 SKU: {sku or 'N/A'} | 📦 Có sẵn: {stock or 0}\n"
             f"- [Xem chi tiết]({BASE_URL}/{pid})\n"
             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
     return response
+
+
+# # Tìm kiếm sản phẩm
+# def extract_query_product(
+#     size: str = "",
+#     color: str = "",
+#     price_range: str = "",
+#     in_stock: bool = True,
+#     limit: int = 5,
+#     country_code: str = "",
+#     lang: str = "",
+#     category_name: str = "",
+# ) -> list:
+#     """
+#     Truy vấn sản phẩm
+#     """
+#     if not country_code:
+#         country_code = "US" if lang == "en" else "VN"
+#     price_unit = "$" if lang == "en" else "VND"
+
+#     sql = """
+#     SELECT 
+#         p.id,
+#         p.name AS product_name,
+#         pp.price,
+#         v.size,
+#         v.color,
+#         v.sku,
+#         v.stock,
+#         p.images[1] AS image_url
+#     FROM "Product" p
+#     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
+#     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
+#     LEFT JOIN "Country" c ON c.id = pp."countryId"
+#     LEFT JOIN "Category" cat ON cat.id = p."categoryId"
+#     WHERE 1=1
+#     """
+#     params = []
+#     # Lọc quốc gia
+#     sql += " AND c.code = %s"
+#     params.append(country_code)
+#     # Lọc còn hàng
+#     if in_stock:
+#         sql += " AND v.stock > 0"
+#     # Cờ xem có filter nào không
+#     has_filters = False
+
+#     # Lọc danh mục
+#     if category_name:
+#         has_filters = True
+#         sql += " AND cat.name ILIKE %s"
+#         params.append(f"%{category_name.strip()}%")
+#     # Lọc size
+#     if size:
+#         has_filters = True
+#         sql += " AND v.size ILIKE %s"
+#         params.append(f"%{size.strip()}%")
+#     # Lọc màu
+#     if color:
+#         has_filters = True
+#         sql += " AND v.color ILIKE %s"
+#         params.append(f"%{color.strip()}%")
+
+#     # Chỉ thêm điều kiện giá nếu có price_range
+#     if price_range:
+#         has_filters = True
+#         price_min = 0
+#         price_max = 1e9
+#         t = price_range.lower().replace(".", "").replace(",", "")
+#         t = t.replace("tr", "000000").replace("k", "000")  
+#         t = re.sub(r"[^\d\-]", " ", t)
+#         digits = [int(s) for s in t.split() if s.isdigit()]
+
+#         if "dưới" in price_range and digits:
+#             price_max = digits[0]
+#         elif "trên" in price_range and digits:
+#             price_min = digits[0]
+#         elif "khoảng" in price_range and len(digits) == 1:
+#             price_min = price_max = digits[0]
+#         elif "từ" in price_range and "-" in price_range:
+#             try:
+#                 parts = price_range.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+#         elif "under" in price_range and digits:
+#             price_max = digits[0]
+#         elif "over" in price_range and digits:
+#             price_min = digits[0]
+#         elif "about" in price_range and digits:
+#             price_min = price_max = digits[0]
+#         elif "from" in price_range and "-" in price_range:
+#             try:
+#                 parts = price_range.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+#         elif "-" in price_range:
+#             try:
+#                 parts = price_range.split("-")
+#                 price_min = int("".join(filter(str.isdigit, parts[0])))
+#                 price_max = int("".join(filter(str.isdigit, parts[1])))
+#             except:
+#                 pass
+#         sql += " AND pp.price BETWEEN %s AND %s"
+#         params.extend([price_min, price_max])
+#     if not has_filters:
+#         # Không có điều kiện nào → lấy 5 sản phẩm mới nhất
+#         sql += ' ORDER BY p."createdAt" DESC, p.id DESC LIMIT %s'
+#     else:
+#         # Khi có filter → ưu tiên giá tăng dần rồi mới đến ngày tạo
+#         sql += ' ORDER BY COALESCE(pp.price, p.price) ASC, p."createdAt" DESC LIMIT %s'
+#     params.append(limit)
+
+#     cursor.execute(sql, params)
+#     products = cursor.fetchall()
+#     if not products:
+#         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
+
+#     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
+#     for p in products:
+#         pid, name, price, size, color, sku, stock, images_url = p
+#         price_fmt = f"{price:,.0f} {price_unit}"
+#         response += (
+#             f"\n🧥 **{name}**\n"
+#             f"- Danh mục: {category_name or 'Chưa rõ'}\n"
+#             f"- 💰 Giá: {price_fmt}\n"
+#             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
+#             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
+#             f"- [Xem chi tiết]({BASE_URL}/{pid})\n"
+#             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
+#         )
+#     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
+#     return response
 
 # Trích xuất kiểm tra đơn hàng
 def check_order_status(
@@ -382,7 +554,8 @@ def check_active_coupons(lang: str = "", country_code: str = "") -> str:
             "endDate"
         FROM "Coupon"
         WHERE "isActive" = TRUE
-          AND NOW() BETWEEN "startDate" AND "endDate"
+            AND type = 'PUBLIC'
+            AND NOW() BETWEEN "startDate" AND "endDate"
         ORDER BY "startDate" DESC
         LIMIT 10
     """
