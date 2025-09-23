@@ -28,6 +28,7 @@ BASE_URL = os.getenv("PRODUCT_BASE_URL")
 def predict_size_model(user_text: str) -> str:
     """
     Gợi ý size dựa vào chiều cao, cân nặng, giới tính, phong cách mặc (ôm, vừa, rộng)
+    Nếu người dùng sử dụng tiếng anh để giao tiếp thì kết quả trả ra bằng tiếng anh, nếu người dùng sử dụng tiếng việt để giao tiếp thì kết quả trả ra bằng tiếng việt.
     Args:
         height : chiều cao của người dùng
         weight: cân nặng của người dùng
@@ -38,30 +39,104 @@ def predict_size_model(user_text: str) -> str:
 
 
 # Hàm chuẩn hóa đầu và tìm kiếm sản phẩm
-# ==== Chuẩn hóa input ====
+# Chuẩn hóa input
 def normalize_size(size: str) -> str:
     if not size:
         return ""
-    return size.strip().upper()  # luôn đưa về in hoa, ví dụ "l" -> "L"
+    return size.strip().upper()
+    
+CATEGORY_MAPPING_INPUT = {
+    "men": "Thời trang nam",
+    "male": "Thời trang nam",
+    "man": "Thời trang nam",
+    "women": "Thời trang nữ",
+    "female": "Thời trang nữ",
+    "woman": "Thời trang nữ",
+}
+CATEGORY_MAPPING_OUTPUT = {
+    "Thời trang nam": "Men's Fashion",
+    "Thời trang nữ": "Women's Fashion",
+}
 
-def normalize_category(category: str) -> str:
+def normalize_category(category: Optional[str]) -> str:
     if not category:
         return ""
-    category = category.strip().lower()
-    mapping = {
-        "nam": "Thời trang nam",
-        "thời trang nam": "Thời trang nam",
-        "nữ": "Thời trang nữ",
-        "thời trang nữ": "Thời trang nữ",
-        "THỜI TRANG NAM": "Thời trang nam",
-        "THỜI TRANG NỮ": "Thời trang nữ",
-        "NAM": "Thời trang nam",
-        "NỮ": "Thời trang nữ",
-        "Nam": "Thời trang nam",
-        "Nữ": "Thời trang nữ",
-    }
-    return mapping.get(category, category.title())  # fallback: viết hoa chữ cái đầu
+    c = category.strip().lower()
+    if c in CATEGORY_MAPPING_INPUT:
+        return CATEGORY_MAPPING_INPUT[c]
+    if "nam" in c or "men" in c:
+        return "Thời trang nam"
+    if "nữ" in c or "nu" in c or "women" in c or "woman" in c:
+        return "Thời trang nữ"
+    return category.title()
 
+def translate_category_for_output(category_name: str, lang: str) -> str:
+    if lang == "en":
+        return CATEGORY_MAPPING_OUTPUT.get(category_name, category_name)
+    return category_name
+
+def normalize_lang(lang: Optional[str]) -> str:
+    return (lang or "").strip().lower()
+
+def detect_lang(user_input: Optional[str]) -> str:
+    """Nhận diện nhanh EN/VN từ text người dùng (không dùng lib ngoài)."""
+    t = (user_input or "").strip().lower()
+    if any(x in t for x in ["en", "eng", "english", "us", "america", "american"]):
+        return "en"
+    if any(x in t for x in ["vi", "vn", "vie", "vietnam", "vietnamese", "tiếng việt", "tieng viet"]):
+        return "vi"
+    return "vi"  # mặc định
+
+def format_price(amount: Optional[float], currency_symbol: Optional[str], country_code: str) -> str:
+    if amount is None:
+        return "Liên hệ"
+    # Ưu tiên symbol từ DB; fallback theo country
+    symbol = currency_symbol or ("$" if country_code == "US" else "₫")
+    if country_code == "US":
+        return f"{symbol}{amount:,.2f}"
+    return f"{amount:,.0f} {symbol}"
+
+# Parse khoảng giá tự nhiên
+def parse_price_range(price_range: str) -> Optional[tuple[int, int]]:
+    """
+    Hỗ trợ cả tiếng Việt & tiếng Anh: 'dưới 500k', 'trên 1tr', 'từ 200k-500k',
+    'under 50', 'over 100', 'about 70', 'from 20-40', '20-40', ...
+    Trả về (min, max) hoặc None nếu không parse được.
+    """
+    if not price_range:
+        return None
+    pr_l = price_range.lower()
+    # chuẩn hóa số: bỏ . , đổi 'tr' thành 000000, 'k' thành 000
+    t = pr_l.replace(".", "").replace(",", "")
+    t = t.replace("tr", "000000").replace("k", "000")
+    t = re.sub(r"[^\d\-]", " ", t)
+    digits = [int(s) for s in t.split() if s.isdigit()]
+
+    price_min, price_max = 0, 1_000_000_000  # 1e9
+    if ("dưới" in pr_l or "under" in pr_l) and digits:
+        price_max = digits[0]
+    elif ("trên" in pr_l or "over" in pr_l) and digits:
+        price_min = digits[0]
+    elif ("khoảng" in pr_l or "about" in pr_l) and digits:
+        price_min = price_max = digits[0]
+    elif ("từ" in pr_l or "from" in pr_l) and "-" in pr_l:
+        try:
+            a, b = pr_l.split("-", 1)
+            price_min = int("".join(filter(str.isdigit, a)))
+            price_max = int("".join(filter(str.isdigit, b)))
+        except Exception:
+            pass
+    elif "-" in pr_l:
+        try:
+            a, b = pr_l.split("-", 1)
+            price_min = int("".join(filter(str.isdigit, a)))
+            price_max = int("".join(filter(str.isdigit, b)))
+        except Exception:
+            pass
+    else:
+        # Không nhận ra pattern → trả None để bỏ filter
+        return None
+    return (price_min, price_max)
 
 # ==== Hàm tìm kiếm sản phẩm ====
 def extract_query_product(
@@ -75,21 +150,29 @@ def extract_query_product(
     category_name: str = "",
 ) -> str:
     """
-    Truy vấn sản phẩm theo điều kiện linh hoạt
+    Truy vấn sản phẩm 
+    Tự động nhận diện lang từ input (en/vi), map sang country_code (US/VN) nếu chưa truyền.
+    Hiển thị đúng ký hiệu tiền theo bảng Country hoặc fallback theo country_code.
+    Hỏi người dùng từng điều kiện một cách lịch sự nếu họ không cung cấp.
+    Điều kiện nào không muốn cung cấp thì bỏ qua (người dùng có thể nói "nào cũng được"/"any"/"no preference/"không"/"No"/"no", tất cả sản phẩm" cho điều kiện đó).
+    Returns:
+        str: Kết quả tìm kiếm sản phẩm dưới dạng markdown.
     """
+    lang = normalize_lang(detect_lang(lang))  
+
     # Chuẩn hóa input
     size = normalize_size(size)
     category_name = normalize_category(category_name)
 
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
-    price_unit = "$" if lang == "en" else "VND"
 
     sql = """
     SELECT 
         p.id,
         p.name AS product_name,
         pp.price,
+        c."currencySymbol",
         v.size,
         v.color,
         v.sku,
@@ -132,48 +215,11 @@ def extract_query_product(
         sql += " AND LOWER(v.color) = %s"
         params.append(color.lower())
 
-    # Lọc giá
-    if price_range:
+    # Giá
+    price = parse_price_range(price_range)
+    if price:
         has_filters = True
-        price_min, price_max = 0, 1e9
-        t = price_range.lower().replace(".", "").replace(",", "")
-        t = t.replace("tr", "000000").replace("k", "000")
-        t = re.sub(r"[^\d\-]", " ", t)
-        digits = [int(s) for s in t.split() if s.isdigit()]
-
-        if "dưới" in price_range and digits:
-            price_max = digits[0]
-        elif "trên" in price_range and digits:
-            price_min = digits[0]
-        elif "khoảng" in price_range and len(digits) == 1:
-            price_min = price_max = digits[0]
-        elif "từ" in price_range and "-" in price_range:
-            try:
-                parts = price_range.split("-")
-                price_min = int("".join(filter(str.isdigit, parts[0])))
-                price_max = int("".join(filter(str.isdigit, parts[1])))
-            except:
-                pass
-        elif "under" in price_range and digits:
-            price_max = digits[0]
-        elif "over" in price_range and digits:
-            price_min = digits[0]
-        elif "about" in price_range and digits:
-            price_min = price_max = digits[0]
-        elif "from" in price_range and "-" in price_range:
-            try:
-                parts = price_range.split("-")
-                price_min = int("".join(filter(str.isdigit, parts[0])))
-                price_max = int("".join(filter(str.isdigit, parts[1])))
-            except:
-                pass
-        elif "-" in price_range:
-            try:
-                parts = price_range.split("-")
-                price_min = int("".join(filter(str.isdigit, parts[0])))
-                price_max = int("".join(filter(str.isdigit, parts[1])))
-            except:
-                pass
+        price_min, price_max = price
         sql += " AND pp.price BETWEEN %s AND %s"
         params.extend([price_min, price_max])
 
@@ -193,155 +239,21 @@ def extract_query_product(
 
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
-        pid, name, price, size, color, sku, stock, images_url = p
-        price_fmt = f"{price:,.0f} {price_unit}" if price else "Liên hệ"
+        pid, name, price, currency_symbol, size, color, sku, stock, images_url = p
+        # Dịch danh mục nếu lang = 'en'
+        category_display = translate_category_for_output(category_name, lang)
+        price_fmt = format_price(price, currency_symbol, country_code)
         response += (
             f"\n🧥 **{name}**\n"
-            f"- Danh mục: {category_name or 'Chưa rõ'}\n"
+            f"- Danh mục: {category_display or 'Chưa rõ'}\n"
             f"- 💰 Giá: {price_fmt}\n"
-            f"- 🎨 Màu: {color or 'Chưa rõ'} | 📏 Size: {size or 'Chưa rõ'}\n"
-            f"- 🔢 SKU: {sku or 'N/A'} | 📦 Có sẵn: {stock or 0}\n"
+            f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
+            f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
             f"- [Xem chi tiết]({BASE_URL}/{pid})\n"
             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
         )
     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
     return response
-
-
-# # Tìm kiếm sản phẩm
-# def extract_query_product(
-#     size: str = "",
-#     color: str = "",
-#     price_range: str = "",
-#     in_stock: bool = True,
-#     limit: int = 5,
-#     country_code: str = "",
-#     lang: str = "",
-#     category_name: str = "",
-# ) -> list:
-#     """
-#     Truy vấn sản phẩm
-#     """
-#     if not country_code:
-#         country_code = "US" if lang == "en" else "VN"
-#     price_unit = "$" if lang == "en" else "VND"
-
-#     sql = """
-#     SELECT 
-#         p.id,
-#         p.name AS product_name,
-#         pp.price,
-#         v.size,
-#         v.color,
-#         v.sku,
-#         v.stock,
-#         p.images[1] AS image_url
-#     FROM "Product" p
-#     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
-#     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
-#     LEFT JOIN "Country" c ON c.id = pp."countryId"
-#     LEFT JOIN "Category" cat ON cat.id = p."categoryId"
-#     WHERE 1=1
-#     """
-#     params = []
-#     # Lọc quốc gia
-#     sql += " AND c.code = %s"
-#     params.append(country_code)
-#     # Lọc còn hàng
-#     if in_stock:
-#         sql += " AND v.stock > 0"
-#     # Cờ xem có filter nào không
-#     has_filters = False
-
-#     # Lọc danh mục
-#     if category_name:
-#         has_filters = True
-#         sql += " AND cat.name ILIKE %s"
-#         params.append(f"%{category_name.strip()}%")
-#     # Lọc size
-#     if size:
-#         has_filters = True
-#         sql += " AND v.size ILIKE %s"
-#         params.append(f"%{size.strip()}%")
-#     # Lọc màu
-#     if color:
-#         has_filters = True
-#         sql += " AND v.color ILIKE %s"
-#         params.append(f"%{color.strip()}%")
-
-#     # Chỉ thêm điều kiện giá nếu có price_range
-#     if price_range:
-#         has_filters = True
-#         price_min = 0
-#         price_max = 1e9
-#         t = price_range.lower().replace(".", "").replace(",", "")
-#         t = t.replace("tr", "000000").replace("k", "000")  
-#         t = re.sub(r"[^\d\-]", " ", t)
-#         digits = [int(s) for s in t.split() if s.isdigit()]
-
-#         if "dưới" in price_range and digits:
-#             price_max = digits[0]
-#         elif "trên" in price_range and digits:
-#             price_min = digits[0]
-#         elif "khoảng" in price_range and len(digits) == 1:
-#             price_min = price_max = digits[0]
-#         elif "từ" in price_range and "-" in price_range:
-#             try:
-#                 parts = price_range.split("-")
-#                 price_min = int("".join(filter(str.isdigit, parts[0])))
-#                 price_max = int("".join(filter(str.isdigit, parts[1])))
-#             except:
-#                 pass
-#         elif "under" in price_range and digits:
-#             price_max = digits[0]
-#         elif "over" in price_range and digits:
-#             price_min = digits[0]
-#         elif "about" in price_range and digits:
-#             price_min = price_max = digits[0]
-#         elif "from" in price_range and "-" in price_range:
-#             try:
-#                 parts = price_range.split("-")
-#                 price_min = int("".join(filter(str.isdigit, parts[0])))
-#                 price_max = int("".join(filter(str.isdigit, parts[1])))
-#             except:
-#                 pass
-#         elif "-" in price_range:
-#             try:
-#                 parts = price_range.split("-")
-#                 price_min = int("".join(filter(str.isdigit, parts[0])))
-#                 price_max = int("".join(filter(str.isdigit, parts[1])))
-#             except:
-#                 pass
-#         sql += " AND pp.price BETWEEN %s AND %s"
-#         params.extend([price_min, price_max])
-#     if not has_filters:
-#         # Không có điều kiện nào → lấy 5 sản phẩm mới nhất
-#         sql += ' ORDER BY p."createdAt" DESC, p.id DESC LIMIT %s'
-#     else:
-#         # Khi có filter → ưu tiên giá tăng dần rồi mới đến ngày tạo
-#         sql += ' ORDER BY COALESCE(pp.price, p.price) ASC, p."createdAt" DESC LIMIT %s'
-#     params.append(limit)
-
-#     cursor.execute(sql, params)
-#     products = cursor.fetchall()
-#     if not products:
-#         return "😔 Không tìm thấy sản phẩm nào phù hợp với yêu cầu của bạn."
-
-#     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
-#     for p in products:
-#         pid, name, price, size, color, sku, stock, images_url = p
-#         price_fmt = f"{price:,.0f} {price_unit}"
-#         response += (
-#             f"\n🧥 **{name}**\n"
-#             f"- Danh mục: {category_name or 'Chưa rõ'}\n"
-#             f"- 💰 Giá: {price_fmt}\n"
-#             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
-#             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
-#             f"- [Xem chi tiết]({BASE_URL}/{pid})\n"
-#             f"- 🖼️ Hình ảnh: ![Image]({images_url})\n"
-#         )
-#     response += "\n👉 Bạn muốn xem chi tiết sản phẩm nào không?"
-#     return response
 
 # Trích xuất kiểm tra đơn hàng
 def check_order_status(
