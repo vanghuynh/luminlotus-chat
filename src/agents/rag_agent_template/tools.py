@@ -138,6 +138,9 @@ def parse_price_range(price_range: str) -> Optional[tuple[int, int]]:
         return None
     return (price_min, price_max)
 
+def unknown_label(lang: str) -> str:
+    return "Unknown" if (lang or "").lower() == "en" else "Chưa rõ"
+
 # ==== Hàm tìm kiếm sản phẩm ====
 def extract_query_product(
     size: str = "",
@@ -153,7 +156,6 @@ def extract_query_product(
     Truy vấn sản phẩm 
     Tự động nhận diện lang từ input (en/vi), map sang country_code (US/VN) nếu chưa truyền.
     Hiển thị đúng ký hiệu tiền theo bảng Country hoặc fallback theo country_code.
-    Hỏi người dùng từng điều kiện một cách lịch sự nếu họ không cung cấp.
     Điều kiện nào không muốn cung cấp thì bỏ qua (người dùng có thể nói "nào cũng được"/"any"/"no preference/"không"/"No"/"no", tất cả sản phẩm" cho điều kiện đó).
     Returns:
         str: Kết quả tìm kiếm sản phẩm dưới dạng markdown.
@@ -162,7 +164,7 @@ def extract_query_product(
 
     # Chuẩn hóa input
     size = normalize_size(size)
-    category_name = normalize_category(category_name)
+    category_name_norm = normalize_category(category_name)
 
     if not country_code:
         country_code = "US" if lang == "en" else "VN"
@@ -177,7 +179,8 @@ def extract_query_product(
         v.color,
         v.sku,
         v.stock,
-        p.images[1] AS image_url
+        p.images[1] AS image_url,
+        cat.name AS category_db_name
     FROM "Product" p
     LEFT JOIN "ProductVariant" v ON v."productId" = p.id
     LEFT JOIN "ProductPrice" pp ON pp."productId" = p.id
@@ -198,10 +201,10 @@ def extract_query_product(
     has_filters = False
 
     # Lọc danh mục
-    if category_name:
+    if category_name_norm:
         has_filters = True
         sql += " AND LOWER(cat.name) LIKE %s"
-        params.append(f"%{category_name.lower()}%")
+        params.append(f"%{category_name_norm.lower()}%")
 
     # Lọc size
     if size:
@@ -239,13 +242,15 @@ def extract_query_product(
 
     response = "🔎 **Kết quả tìm kiếm sản phẩm:**\n"
     for p in products:
-        pid, name, price, currency_symbol, size, color, sku, stock, images_url = p
+        pid, name, price, currency_symbol, size, color, sku, stock, images_url, category_db_name = p
         # Dịch danh mục nếu lang = 'en'
-        category_display = translate_category_for_output(category_name, lang)
+        cat_display = translate_category_for_output(
+            normalize_category(category_db_name or ""), lang
+        ) or unknown_label(lang)        
         price_fmt = format_price(price, currency_symbol, country_code)
         response += (
             f"\n🧥 **{name}**\n"
-            f"- Danh mục: {category_display or 'Chưa rõ'}\n"
+            f"- Danh mục: {cat_display}\n"
             f"- 💰 Giá: {price_fmt}\n"
             f"- 🎨 Màu: {color} | 📏 Size: {size}\n"
             f"- 🔢 SKU: {sku} | 📦 Có sẵn: {stock}\n"
