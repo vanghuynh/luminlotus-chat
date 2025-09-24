@@ -14,7 +14,7 @@ pipe = joblib.load(MODEL_PATH)
 le = joblib.load(ENCODER_PATH)
 
 # Các size theo thứ tự logic
-canonical_order = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"]
+canonical_order = ["XXS", "S", "M", "L", "XL", "XXL", "XXXL"]
 
 # Map phong cách
 fit_map = {"ôm": -1, "vừa": 0, "rộng": 1}
