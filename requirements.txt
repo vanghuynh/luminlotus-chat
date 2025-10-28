@@ -37,3 +37,6 @@ numpy
 gunicorn
 matplotlib
 ddgs
+
+matplotlib
+duckduckgo-search
