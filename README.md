@@ -13,6 +13,6 @@ Dự án này là một **chatbot thời trang trực tuyến thông minh**, đ�
 
 ---
 
+I found a few products that match your criteria: _ **Manchester Utd**: $10, Red, Size L _ **BAYERN MUNICH 25/26 AWAY KIT**: $15, White, Size L _ **Manchester Utd chếch chi cho nữ**: $20, Red, Size L _ **Manchester Utd chếch chi cho nữ**: $20, Blue, Size L Would you like to see details for any of these?
 
-
-I found a few products that match your criteria: * **Manchester Utd**: $10, Red, Size L * **BAYERN MUNICH 25/26 AWAY KIT**: $15, White, Size L * **Manchester Utd chếch chi cho nữ**: $20, Red, Size L * **Manchester Utd chếch chi cho nữ**: $20, Blue, Size L Would you like to see details for any of these?
+# Update here
